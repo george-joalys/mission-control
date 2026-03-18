@@ -1,53 +1,62 @@
-import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import { join } from "path";
+import { createClient } from "@supabase/supabase-js"
+import { NextResponse } from "next/server"
 
-const PIPELINE_DIR = "/Users/joalys/.openclaw/workspace/code-pipeline";
+export const dynamic = "force-dynamic"
 
-const FILES = {
-  backlog: "backlog.md",
-  spec: "spec.md",
-  inProgress: "in-progress.md",
-  qa: "qa.md",
-  review: "review.md",
-  shipped: "shipped.md",
-  archive: "archive.md",
-};
-
-function parseTasks(content: string): string[] {
-  const lines = content.split("\n");
-  const tasks: string[] = [];
-  for (const line of lines) {
-    const match = line.match(/^###\s+(.+)/);
-    if (match) {
-      tasks.push(match[1].trim());
-    }
-  }
-  return tasks;
-}
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function GET() {
-  const stages: Record<string, string[]> = {};
+  try {
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
+    const { data: tasks, error } = await supabase
+      .from("pipeline_tasks")
+      .select("*")
+      .order("updated_at", { ascending: false })
 
-  for (const [key, file] of Object.entries(FILES)) {
-    try {
-      const content = await readFile(join(PIPELINE_DIR, file), "utf-8");
-      stages[key] = parseTasks(content);
-    } catch {
-      stages[key] = [];
+    if (error) throw error
+
+    const stages: Record<string, typeof tasks> = {
+      backlog: [],
+      spec: [],
+      inProgress: [],
+      qa: [],
+      review: [],
+      shipped: [],
+      archive: [],
     }
+
+    const statusMap: Record<string, string> = {
+      BACKLOG: "backlog",
+      SPEC: "spec",
+      DISPATCHED: "inProgress",
+      ACK_RECEIVED: "inProgress",
+      IN_PROGRESS: "inProgress",
+      STALLED: "inProgress",
+      BLOCKED: "inProgress",
+      READY_FOR_QA: "qa",
+      QA_IN_PROGRESS: "qa",
+      REVIEW: "review",
+      SHIPPED: "shipped",
+      FAILED: "archive",
+      ARCHIVED: "archive",
+    }
+
+    for (const task of tasks || []) {
+      const stage = statusMap[task.status] || "backlog"
+      stages[stage]!.push(task)
+    }
+
+    const stats = {
+      shippedToday: stages.shipped?.length || 0,
+      inProgress: stages.inProgress?.length || 0,
+      backlog: stages.backlog?.length || 0,
+      blocked: (tasks || []).filter((t) => t.status === "BLOCKED" || t.status === "STALLED" || t.status === "FAILED").length,
+      total: tasks?.length || 0,
+    }
+
+    return NextResponse.json({ stages, stats, tasks })
+  } catch (err) {
+    return NextResponse.json({ error: String(err), stages: {}, stats: {}, tasks: [] }, { status: 500 })
   }
-
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const shippedToday = stages.shipped.filter((t) => t.includes(today)).length;
-
-  const stats = {
-    shippedToday,
-    inProgress: stages.inProgress.length,
-    backlog: stages.backlog.length,
-    blocked: 0,
-    avgPipelineTime: "—",
-  };
-
-  return NextResponse.json({ stages, stats });
 }

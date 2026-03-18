@@ -19,6 +19,12 @@ const SUPABASE_URL = "https://zbykeskpwlweyqgpaawh.supabase.co";
 const SERVICE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpieWtlc2twd2x3ZXlxZ3BhYXdoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzgwMjY2OCwiZXhwIjoyMDg5Mzc4NjY4fQ.Ubw7x4e3-3KMD9_RuECMCYndliP56p3P7hBv_2ltSxQ";
 
+const PIPELINE_DIR = join(homedir(), ".openclaw/workspace/code-pipeline");
+const TASK_STATE_PATH = join(
+  homedir(),
+  ".openclaw/workspace/factory-docs/task-state.md"
+);
+
 const GATEWAY_URL = "http://127.0.0.1:18789";
 
 const SKILLS_DIRS = [
@@ -348,6 +354,91 @@ function buildTasks() {
   });
 }
 
+// ── Pipeline tasks ──────────────────────────────────────────────────────────
+
+function parseTaskState() {
+  if (!existsSync(TASK_STATE_PATH)) return [];
+  const content = readFileSync(TASK_STATE_PATH, "utf-8");
+  const rows = [];
+  for (const line of content.split("\n")) {
+    // Match table rows: | TASK-ID | STATUS | AGENT | TIMESTAMP | RETRY_COUNT |
+    const m = line.match(
+      /^\|\s*(TASK-\S+)\s*\|\s*(\S+)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(\d+)\s*\|/
+    );
+    if (m) {
+      rows.push({
+        id: m[1],
+        status: m[2],
+        agent_id: m[3] === "—" ? null : m[3],
+        dispatched_at: m[4] === "—" ? null : m[4],
+        retry_count: parseInt(m[5], 10),
+      });
+    }
+  }
+  return rows;
+}
+
+function readPipelineNotes() {
+  const notes = {};
+  const stageFiles = {
+    BACKLOG: "backlog.md",
+    SPEC: "spec.md",
+    IN_PROGRESS: "in-progress.md",
+    QA: "qa.md",
+    REVIEW: "review.md",
+    SHIPPED: "shipped.md",
+    ARCHIVE: "archive.md",
+  };
+  for (const [, file] of Object.entries(stageFiles)) {
+    const filePath = join(PIPELINE_DIR, file);
+    if (!existsSync(filePath)) continue;
+    const content = readFileSync(filePath, "utf-8");
+    let currentTask = null;
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const hdr = line.match(/^###\s+(?:\[.*?\]\s*)?(\S+)\s*[—–-]\s*(.*)/);
+      if (hdr) {
+        currentTask = hdr[1];
+        notes[currentTask] = { title: hdr[2].trim(), body: "" };
+      } else if (currentTask && line.startsWith("- ")) {
+        notes[currentTask].body += line + "\n";
+      }
+    }
+  }
+  return notes;
+}
+
+function buildPipelineTasks() {
+  const taskRows = parseTaskState();
+  const pipelineNotes = readPipelineNotes();
+
+  return taskRows.map((row) => {
+    const info = pipelineNotes[row.id];
+    return {
+      id: row.id,
+      title: info?.title ?? row.id,
+      status: row.status,
+      agent_id: row.agent_id,
+      retry_count: row.retry_count,
+      dispatched_at: row.dispatched_at,
+      updated_at: new Date().toISOString(),
+      notes: info?.body?.trim() || null,
+    };
+  });
+}
+
+async function upsertPipelineTasks(tasks) {
+  if (tasks.length === 0) {
+    console.log("  pipeline_tasks: 0 (no tasks found)");
+    return;
+  }
+  const { error } = await sb
+    .from("pipeline_tasks")
+    .upsert(tasks, { onConflict: "id" });
+  if (error) throw new Error(`pipeline_tasks upsert failed: ${error.message}`);
+  console.log(`  pipeline_tasks: ${tasks.length} upserted`);
+}
+
 // ── Upsert helpers ───────────────────────────────────────────────────────────
 
 async function upsertAgents(agents) {
@@ -422,6 +513,9 @@ async function main() {
   const costs = buildCosts(sessions);
   const comms = buildComms();
   const tasks = buildTasks();
+  const pipelineTasks = buildPipelineTasks();
+
+  console.log(`🏭 Found ${pipelineTasks.length} pipeline tasks from task-state.md\n`);
 
   // 4. Upsert to Supabase
   console.log("📤 Upserting to Supabase:");
@@ -431,6 +525,7 @@ async function main() {
   await insertCosts(costs);
   await insertComms(comms);
   await insertTasks(tasks);
+  await upsertPipelineTasks(pipelineTasks);
 
   console.log("\n✅ Sync complete!");
 }
