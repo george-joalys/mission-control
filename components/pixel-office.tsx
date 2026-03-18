@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase";
 
@@ -10,29 +10,29 @@ import { createClient } from "@/lib/supabase";
    ═══════════════════════════════════════════════════════════════════════ */
 
 const GEORGE_MESSAGES = [
-  "Found a 5ct Ceylon sapphire! 💎",
-  "Dispatching SEO article on tourmaline...",
-  "New B2B inquiry from Paris 🗼",
-  "Grading this padparadscha...",
-  "Shipment from Ratnapura arrived! 📦",
-  "Quality check: AAA grade ruby ✓",
-  "This alexandrite changes color beautifully!",
-  "Updating gem inventory database...",
-  "Hey SEO, write about star sapphires!",
-  "Checking mine reports from Elahera...",
+  "📨 Message from the boss! On it... 💪",
+  "🔍 Scanning gem market prices...",
+  "💎 Found a 5ct Ceylon sapphire!",
+  "📦 Shipment from Ratnapura incoming!",
+  "🗼 New B2B client from Paris!",
+  "⛏️ Mining report from the field...",
+  "💍 New jewelry design approved!",
+  "📊 Sales up 12% this week!",
+  "🌿 Sourcing ethically certified gems...",
+  "✈️ Next trip to Sri Lanka: confirmed!",
 ];
 
 const SEO_MESSAGES = [
-  "Writing: Top 10 Gemstones of Sri Lanka 📝",
-  "SEO score: 94/100 ✅",
-  "Published: Guide to Buying Rubies",
-  "Keyword: 'ceylon sapphire' trending 📈",
-  "Draft ready: Tourmaline buying guide",
-  "Optimizing meta tags for gem pages...",
-  "Blog post: Ethical Gem Sourcing ✍️",
-  "Analyzing competitor backlinks...",
-  "New article live: Spinel vs Ruby",
-  "On it! Researching star sapphires! 📝",
+  "✍️ Writing: Top Gemstones from Sri Lanka",
+  "📈 SEO score: 94/100 ✅",
+  "🔑 New keyword: natural sapphire +320%",
+  "📝 Draft ready: Padparadscha Guide",
+  "🏆 Page 1 for 'ceylon ruby' — yes!",
+  "🔗 Building backlinks from gem blogs...",
+  "📊 Organic traffic up 27% this month!",
+  "✅ Published: Ethical Sourcing Guide",
+  "🔍 Competitor analysis complete",
+  "💡 New article idea: Spinel vs Ruby",
 ];
 
 const GEM = {
@@ -908,70 +908,56 @@ export function PixelOffice() {
   const [seoJumping, setSeoJumping] = useState(false);
   const [gMsgIdx, setGMsgIdx] = useState(0);
   const [sMsgIdx, setSMsgIdx] = useState(0);
-  const [lastRealtimeAt, setLastRealtimeAt] = useState(0);
+  const lastRealtimeRef = useRef(0);
 
-  // ── Supabase Realtime ────────────────────────────────────────────
+  // Poll comms table every 3 seconds for new entries
   useEffect(() => {
-    let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null =
-      null;
-    try {
-      const supabase = createClient();
-      channel = supabase
-        .channel("office-comms")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "comms" },
-          (payload) => {
-            const data = payload.new as {
-              direction?: string;
-              content?: string;
-              agent?: string;
-              message?: string;
-            };
-            const msg =
-              data.content || data.message || "New activity detected...";
-            const agent = data.agent || data.direction || "George";
-            setLastRealtimeAt(Date.now());
+    let lastId: string | null = null;
 
-            if (
-              agent.toLowerCase().includes("seo") ||
-              agent.toLowerCase().includes("sub")
-            ) {
-              setSeoMsg(msg);
-              setTimeout(() => setSeoMsg(null), 4000);
-            } else {
-              setGeorgeMsg(msg);
-              setTimeout(() => setGeorgeMsg(null), 4000);
+    const poll = async () => {
+      try {
+        const supabase = createClient();
+        const query = supabase
+          .from("comms")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-              if (
-                msg.toLowerCase().includes("dispatch") ||
-                msg.toLowerCase().includes("hey") ||
-                msg.toLowerCase().includes("write")
-              ) {
-                setIsDispatching(true);
-                setTimeout(() => {
-                  setSeoJumping(true);
-                  setTimeout(() => setSeoJumping(false), 500);
-                }, 1200);
-                setTimeout(() => setIsDispatching(false), 3000);
-              }
-            }
+        const { data } = await query;
+        if (!data || data.length === 0) return;
+
+        const latest = data[0];
+        if (latest.id === lastId) return; // No new entry
+        lastId = latest.id;
+
+        const msg = latest.message || "New activity...";
+        const fromAgent = latest.from_agent || "George";
+        lastRealtimeRef.current = Date.now();
+
+        if (fromAgent.toLowerCase().includes("seo") || fromAgent.toLowerCase().includes("sub")) {
+          setSeoMsg(msg);
+          setTimeout(() => setSeoMsg(null), 5000);
+        } else {
+          setGeorgeMsg(msg);
+          setTimeout(() => setGeorgeMsg(null), 5000);
+          if (msg.toLowerCase().includes("dispatch") || msg.toLowerCase().includes("seo") || msg.toLowerCase().includes("write")) {
+            setIsDispatching(true);
+            setTimeout(() => { setSeoJumping(true); setTimeout(() => setSeoJumping(false), 500); }, 1200);
+            setTimeout(() => setIsDispatching(false), 3000);
           }
-        )
-        .subscribe();
-    } catch {
-      // Supabase not configured — fallback only
-    }
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    // Initial poll after 2s
+    const timeout = setTimeout(poll, 2000);
+    const interval = setInterval(poll, 3000);
 
     return () => {
-      if (channel) {
-        try {
-          const supabase = createClient();
-          supabase.removeChannel(channel);
-        } catch {
-          // ignore cleanup errors
-        }
-      }
+      clearTimeout(timeout);
+      clearInterval(interval);
     };
   }, []);
 
@@ -990,7 +976,7 @@ export function PixelOffice() {
     showGeorge(GEORGE_MESSAGES[0]);
 
     const interval = setInterval(() => {
-      if (Date.now() - lastRealtimeAt < 30000) return;
+      if (Date.now() - lastRealtimeRef.current < 30000) return;
 
       // Alternate between George and SEO
       const isGeorgeTurn = Math.random() > 0.4;
@@ -1002,9 +988,9 @@ export function PixelOffice() {
 
           // Trigger dispatch animation on certain messages
           if (
-            msg.includes("Dispatching") ||
-            msg.includes("Hey") ||
-            msg.includes("write")
+            msg.includes("boss") ||
+            msg.includes("B2B") ||
+            msg.includes("design")
           ) {
             setIsDispatching(true);
             setTimeout(() => {
@@ -1025,7 +1011,7 @@ export function PixelOffice() {
     }, 6000);
 
     return () => clearInterval(interval);
-  }, [lastRealtimeAt]);
+  }, []);
 
   return (
     <div

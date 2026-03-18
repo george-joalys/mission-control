@@ -1,6 +1,7 @@
-"use client";
-
 import { PixelOffice } from "@/components/pixel-office";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default function OfficePage() {
   return (
