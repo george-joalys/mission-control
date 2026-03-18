@@ -1,0 +1,68 @@
+[
+  {
+    "id": "c1",
+    "from": "George",
+    "to": "SEO Agent",
+    "task": "Write article about best AI tools for 2026",
+    "timestamp": "2026-03-18T08:30:00Z",
+    "duration": "4m 12s",
+    "status": "completed",
+    "fromAvatar": "🤖",
+    "toAvatar": "✍️"
+  },
+  {
+    "id": "c2",
+    "from": "SEO Agent",
+    "to": "George",
+    "task": "Article draft ready for review (2,400 words)",
+    "timestamp": "2026-03-18T08:34:12Z",
+    "duration": "0s",
+    "status": "completed",
+    "fromAvatar": "✍️",
+    "toAvatar": "🤖"
+  },
+  {
+    "id": "c3",
+    "from": "George",
+    "to": "SEO Agent",
+    "task": "Run keyword research for 'mission control dashboard'",
+    "timestamp": "2026-03-18T09:15:00Z",
+    "duration": "2m 45s",
+    "status": "completed",
+    "fromAvatar": "🤖",
+    "toAvatar": "✍️"
+  },
+  {
+    "id": "c4",
+    "from": "SEO Agent",
+    "to": "George",
+    "task": "Found 34 keyword opportunities, top: 'ai agent dashboard' (vol: 2.4k)",
+    "timestamp": "2026-03-18T09:17:45Z",
+    "duration": "0s",
+    "status": "completed",
+    "fromAvatar": "✍️",
+    "toAvatar": "🤖"
+  },
+  {
+    "id": "c5",
+    "from": "George",
+    "to": "SEO Agent",
+    "task": "Draft blog post about Mission Control features",
+    "timestamp": "2026-03-18T10:00:00Z",
+    "duration": null,
+    "status": "in-progress",
+    "fromAvatar": "🤖",
+    "toAvatar": "✍️"
+  },
+  {
+    "id": "c6",
+    "from": "George",
+    "to": "SEO Agent",
+    "task": "Optimize meta descriptions for landing pages",
+    "timestamp": "2026-03-18T11:30:00Z",
+    "duration": null,
+    "status": "queued",
+    "fromAvatar": "🤖",
+    "toAvatar": "✍️"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "george",
+    "name": "George",
+    "role": "Main Orchestrator",
+    "status": "active",
+    "model": "claude-sonnet-4-6",
+    "type": "main",
+    "lastAction": "Dispatched SEO brief to SEO Agent",
+    "tokenCount": 148230,
+    "avatar": "🤖",
+    "color": "#6366f1",
+    "uptime": "12h 34m",
+    "tasksCompleted": 47
+  },
+  {
+    "id": "seo-agent",
+    "name": "SEO Agent",
+    "role": "Content & SEO Specialist",
+    "status": "idle",
+    "model": "claude-sonnet-4-6",
+    "type": "sub",
+    "lastAction": "Finished article: 'Best AI Tools 2026'",
+    "tokenCount": 89450,
+    "avatar": "✍️",
+    "color": "#10b981",
+    "uptime": "8h 12m",
+    "tasksCompleted": 23
+  }
+]

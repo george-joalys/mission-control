@@ -1,0 +1,102 @@
+[
+  {
+    "id": "t1",
+    "title": "Write SEO article: AI Tools",
+    "agent": "seo-agent",
+    "date": "2026-03-16",
+    "time": "09:00",
+    "recurring": false,
+    "status": "completed",
+    "color": "#10b981"
+  },
+  {
+    "id": "t2",
+    "title": "Keyword research batch",
+    "agent": "seo-agent",
+    "date": "2026-03-17",
+    "time": "10:00",
+    "recurring": true,
+    "status": "completed",
+    "color": "#10b981"
+  },
+  {
+    "id": "t3",
+    "title": "System health check",
+    "agent": "george",
+    "date": "2026-03-18",
+    "time": "08:00",
+    "recurring": true,
+    "status": "in-progress",
+    "color": "#6366f1"
+  },
+  {
+    "id": "t4",
+    "title": "Draft blog: Mission Control",
+    "agent": "seo-agent",
+    "date": "2026-03-18",
+    "time": "11:00",
+    "recurring": false,
+    "status": "pending",
+    "color": "#10b981"
+  },
+  {
+    "id": "t5",
+    "title": "Review agent performance",
+    "agent": "george",
+    "date": "2026-03-19",
+    "time": "14:00",
+    "recurring": false,
+    "status": "pending",
+    "color": "#6366f1"
+  },
+  {
+    "id": "t6",
+    "title": "Optimize prompts",
+    "agent": "george",
+    "date": "2026-03-19",
+    "time": "16:00",
+    "recurring": false,
+    "status": "pending",
+    "color": "#6366f1"
+  },
+  {
+    "id": "t7",
+    "title": "Publish weekly newsletter",
+    "agent": "seo-agent",
+    "date": "2026-03-20",
+    "time": "09:00",
+    "recurring": true,
+    "status": "pending",
+    "color": "#10b981"
+  },
+  {
+    "id": "t8",
+    "title": "Backup agent configs",
+    "agent": "george",
+    "date": "2026-03-20",
+    "time": "18:00",
+    "recurring": true,
+    "status": "pending",
+    "color": "#6366f1"
+  },
+  {
+    "id": "t9",
+    "title": "Content audit",
+    "agent": "seo-agent",
+    "date": "2026-03-21",
+    "time": "10:00",
+    "recurring": false,
+    "status": "pending",
+    "color": "#10b981"
+  },
+  {
+    "id": "t10",
+    "title": "Weekly summary report",
+    "agent": "george",
+    "date": "2026-03-22",
+    "time": "17:00",
+    "recurring": true,
+    "status": "pending",
+    "color": "#6366f1"
+  }
+]
