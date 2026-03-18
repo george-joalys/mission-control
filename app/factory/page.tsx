@@ -126,6 +126,31 @@ export default function FactoryPage() {
         </div>
       </div>
 
+      {/* Supervision Panel */}
+      <div className="mb-8">
+        <h2 className="text-xs text-gray-500 tracking-widest mb-4">Supervision</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "ACK Timeout", value: "30 min", desc: "Re-ping si pas d'ACK", color: "#22c55e", icon: "🟢" },
+            { label: "Stall Detection", value: "2h", desc: "STALLED + re-ping", color: "#eab308", icon: "🟡" },
+            { label: "Escalation", value: "4h", desc: "Telegram alert", color: "#ef4444", icon: "🔴" },
+            { label: "Max Retries", value: "2", desc: "[RETRY-1] / [RETRY-2]", color: "#a855f7", icon: "🟣" },
+          ].map((rule) => (
+            <div
+              key={rule.label}
+              className="border border-gray-800 rounded-lg p-4 flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-2">
+                <span>{rule.icon}</span>
+                <span className="text-[10px] text-gray-400 tracking-widest">{rule.label}</span>
+              </div>
+              <div className="text-2xl font-bold" style={{ color: rule.color }}>{rule.value}</div>
+              <span className="text-[9px] text-gray-600">{rule.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Stats Bar */}
       <div className="border border-gray-800 rounded-lg p-4">
         <div className="grid grid-cols-5 gap-4 text-center">
