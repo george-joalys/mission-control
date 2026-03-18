@@ -116,7 +116,10 @@ export default function FactoryPage() {
                       key={j}
                       className="bg-gray-800/60 rounded px-2 py-1 text-[9px] text-gray-300 truncate"
                     >
-                      {task}
+                      <span className="font-bold">{typeof task === 'object' && task !== null ? (task as {id?: string}).id ?? '—' : String(task)}</span>
+                      {typeof task === 'object' && task !== null && (task as {title?: string}).title && (
+                        <span className="ml-1 text-gray-500">{(task as {title?: string}).title}</span>
+                      )}
                     </div>
                   ))}
                 </div>
