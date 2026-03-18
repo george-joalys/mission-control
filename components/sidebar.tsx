@@ -10,6 +10,7 @@ import {
   DollarSign,
   MessageSquare,
   Building2,
+  Factory,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/costs", label: "Costs", icon: DollarSign },
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/office", label: "Office", icon: Building2, fun: true },
+  { href: "/factory", label: "🏭 Factory", icon: Factory },
 ];
 
 export function Sidebar() {
