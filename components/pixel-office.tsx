@@ -240,10 +240,17 @@ function createTorchesAndFireplace(scene: THREE.Scene): TorchData {
     scene.add(flame);
     flames.push(flame);
 
-    const torchLight = new THREE.PointLight(0xff6600, 0.8, 8);
+    const torchLight = new THREE.PointLight(0xff6600, 1.8, 14);
     torchLight.position.set(tx, ty + 0.5, tz);
     scene.add(torchLight);
     lights.push(torchLight);
+
+    // 2nd smaller flame per torch
+    const flame2Geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+    const flame2 = new THREE.Mesh(flame2Geo, flameMat.clone());
+    flame2.position.set(tx + 0.05, ty + 0.45, tz + 0.05);
+    scene.add(flame2);
+    flames.push(flame2);
   }
 
   // ═══ CENTRAL FIREPLACE ═══
@@ -297,11 +304,29 @@ function createTorchesAndFireplace(scene: THREE.Scene): TorchData {
   scene.add(sf2);
   flames.push(sf2);
 
+  // 2 additional flame meshes around the main flame
+  const extraFlameGeo = new THREE.BoxGeometry(0.25, 0.35, 0.25);
+  const extraFlameMat1 = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 });
+  const ef1 = new THREE.Mesh(extraFlameGeo, extraFlameMat1);
+  ef1.position.set(-0.2, 0.55, 1.35);
+  scene.add(ef1);
+  flames.push(ef1);
+  const extraFlameMat2 = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.75 });
+  const ef2 = new THREE.Mesh(extraFlameGeo, extraFlameMat2);
+  ef2.position.set(0.2, 0.5, 1.65);
+  scene.add(ef2);
+  flames.push(ef2);
+
   // Fireplace PointLight (big warm light)
-  const fireplaceLight = new THREE.PointLight(0xff6622, 1.5, 12);
+  const fireplaceLight = new THREE.PointLight(0xff6622, 3.5, 22);
   fireplaceLight.position.set(0, 1.2, 1.5);
   fireplaceLight.castShadow = true;
   scene.add(fireplaceLight);
+
+  // 2nd PointLight near the fireplace
+  const fireplaceLight2 = new THREE.PointLight(0xff8800, 2.0, 15);
+  fireplaceLight2.position.set(0, 0.8, 1.5);
+  scene.add(fireplaceLight2);
 
   return { flames, lights, fireplaceFlame, fireplaceLight };
 }
@@ -1357,12 +1382,24 @@ function updateSkyBackground(
 }
 
 // ─── Main component ─────────────────────────────────────────────────
+// Desk positions for active agents (7 agents, 7 desks at z=-5)
+const DESK_POSITIONS: Record<string, THREE.Vector3> = {
+  george: new THREE.Vector3(0, 0, -5),
+  rex: new THREE.Vector3(-3, 0, -5),
+  leo: new THREE.Vector3(-2, 0, -5),
+  iris: new THREE.Vector3(-1, 0, -5),
+  atlas: new THREE.Vector3(1, 0, -5),
+  scout: new THREE.Vector3(2, 0, -5),
+  hugo: new THREE.Vector3(3, 0, -5),
+};
+
 export function PixelOffice() {
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const [showNames, setShowNames] = useState(true);
   const labelsVisibleRef = useRef(true);
   const agentPartsRef = useRef<AgentParts[]>([]);
+  const activeAgentsRef = useRef<Record<string, string>>({});
 
   const resetCamera = useCallback(() => {
     if (controlsRef.current) {
@@ -1656,6 +1693,16 @@ export function PixelOffice() {
       parts.label.visible = labelsVisibleRef.current;
     }
 
+    // ─── Fetch active agents every 10s ──────────────────────
+    const fetchActiveAgents = () => {
+      fetch("/api/office")
+        .then(r => r.json())
+        .then(d => { activeAgentsRef.current = d.activeAgents ?? {}; })
+        .catch(() => {});
+    };
+    fetchActiveAgents();
+    const agentFetchInterval = setInterval(fetchActiveAgents, 10000);
+
     // ─── Animation loop ──────────────────────────────────────
     let frameId: number;
     const clock = new THREE.Clock();
@@ -1669,24 +1716,40 @@ export function PixelOffice() {
       const elapsed = clock.getElapsedTime();
       const delta = clock.getDelta();
 
-      // Animate agents + bulles de dialogue
+      // Animate agents + bulles de dialogue + active agent walk
       for (let i = 0; i < agentParts.length; i++) {
         const parts = agentParts[i]!;
         animateAgent(parts, elapsed);
 
-        // Bulle de dialogue — change toutes les 4 secondes par agent
         const agentId = AGENTS_3D[i]?.id ?? "george";
-        const bubbles = AGENT_BUBBLES[agentId] ?? [];
-        if (bubbles.length > 0) {
-          const bubbleIndex = Math.floor((elapsed + i * 1.5) / 4) % bubbles.length;
-          const showBubble = Math.sin((elapsed + i * 1.5) * (Math.PI / 4)) > 0.7;
-          const bubbleObj = parts.group.children.find(
-            (c) => c instanceof CSS2DObject && (c as CSS2DObject).element.className === "agent-bubble"
-          ) as CSS2DObject | undefined;
-          if (bubbleObj) {
-            const el = bubbleObj.element as HTMLElement;
-            el.textContent = bubbles[bubbleIndex] ?? "";
-            el.style.opacity = showBubble ? "1" : "0";
+        const activeTask = activeAgentsRef.current[agentId];
+
+        // Target position: desk if active, original circle position if idle
+        const originalPos = new THREE.Vector3(...AGENTS_3D[i]!.position);
+        const targetPos = activeTask ? (DESK_POSITIONS[agentId] ?? originalPos) : originalPos;
+
+        // Smooth lerp
+        parts.group.position.lerp(targetPos, 0.03);
+
+        // Bulle de dialogue — show task if active, else rotate idle bubbles
+        const bubbleObj = parts.group.children.find(
+          (c) => c instanceof CSS2DObject && (c as CSS2DObject).element.className === "agent-bubble"
+        ) as CSS2DObject | undefined;
+        if (bubbleObj) {
+          const el = bubbleObj.element as HTMLElement;
+          if (activeTask) {
+            el.textContent = "\uD83D\uDCBC " + activeTask.substring(0, 28) + (activeTask.length > 28 ? "..." : "");
+            el.style.opacity = "1";
+            el.style.borderColor = AGENTS_3D[i]!.color;
+          } else {
+            // Rotating idle bubbles
+            const bubbles = AGENT_BUBBLES[agentId] ?? [];
+            if (bubbles.length > 0) {
+              const bubbleIndex = Math.floor((elapsed + i * 1.5) / 4) % bubbles.length;
+              const showBubble = Math.sin((elapsed + i * 1.5) * (Math.PI / 4)) > 0.7;
+              el.textContent = bubbles[bubbleIndex] ?? "";
+              el.style.opacity = showBubble ? "1" : "0";
+            }
           }
         }
       }
@@ -1798,13 +1861,13 @@ export function PixelOffice() {
         flame.scale.x = 0.85 + Math.random() * 0.3;
       }
       for (const light of torchData.lights) {
-        light.intensity = 0.6 + Math.random() * 0.4;
+        light.intensity = 1.4 + Math.random() * 0.8;
       }
 
       // Fireplace flickering
       torchData.fireplaceFlame.scale.y = 0.8 + Math.random() * 0.4;
       torchData.fireplaceFlame.scale.x = 0.9 + Math.random() * 0.2;
-      torchData.fireplaceLight.intensity = 1.2 + Math.random() * 0.6;
+      torchData.fireplaceLight.intensity = 3.0 + Math.random() * 1.2;
       const fireColorShift = Math.random();
       torchData.fireplaceLight.color.setHex(
         fireColorShift > 0.5 ? 0xff6622 : 0xff4411
@@ -1834,6 +1897,7 @@ export function PixelOffice() {
     return () => {
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(frameId);
+      clearInterval(agentFetchInterval);
 
       controls.dispose();
 

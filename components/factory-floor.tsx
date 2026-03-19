@@ -29,16 +29,13 @@ const STATUS_LABELS: Record<ActiveStatus, string> = {
 
 /** Agent-id -> hex colour for the pixel head background. */
 const AGENT_COLORS: Record<string, string> = {
-  'george/main': '#3b82f6',
-  'rex/coder': '#f97316',
-  builder: '#6b7280',
-  'leo/content': '#22c55e',
-  'iris/analyst': '#ec4899',
-  'atlas/librarian': '#8b5cf6',
-  'hugo/leads': '#ef4444',
-  'scout/trend': '#06b6d4',
-  tester: '#eab308',
-  reviewer: '#6366f1',
+  george: '#6366f1',
+  rex: '#f97316',
+  leo: '#22c55e',
+  iris: '#ec4899',
+  atlas: '#8b5cf6',
+  scout: '#06b6d4',
+  hugo: '#ef4444',
 };
 
 const DEFAULT_AGENT_COLOR = '#9ca3af';
@@ -70,12 +67,19 @@ function ensureKeyframes(): void {
 
 function resolveColor(agentId: string): string {
   const normalized = agentId.trim().toLowerCase();
-  return AGENT_COLORS[normalized] ?? DEFAULT_AGENT_COLOR;
+  // Try exact match first
+  if (AGENT_COLORS[normalized]) return AGENT_COLORS[normalized]!;
+  // Try partial match (e.g., "rex/coder" → "rex")
+  for (const [key, color] of Object.entries(AGENT_COLORS)) {
+    if (normalized.includes(key) || key.includes(normalized)) return color;
+  }
+  return DEFAULT_AGENT_COLOR;
 }
 
 function extractDisplayName(agentId: string): string {
   const parts = agentId.split('/');
-  return parts[0] ?? agentId;
+  const name = parts[0] ?? agentId;
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 function isActiveStatus(status: string): status is ActiveStatus {
