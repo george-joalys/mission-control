@@ -388,8 +388,12 @@ interface AgentParts {
   rightArm: THREE.Mesh;
   leftLeg: THREE.Mesh;
   rightLeg: THREE.Mesh;
+  // New parts
+  hat: THREE.Mesh; // Role-specific hat/helmet
+  item: THREE.Mesh | null; // Held item (different per role)
   label: CSS2DObject;
   offset: number;
+  roleId: string; // For role-specific animations
 }
 
 function createAgent(
@@ -404,8 +408,9 @@ function createAgent(
     color: agentColor.clone().multiplyScalar(0.6),
   });
 
-  // Head (0.6 cube)
+  // ═══ HEAD (classic Minecraft 8x8x8 pixel = 0.6 cube) ═══
   const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+  // Face: front = skin, top = agent color (hair), rest = skin
   const head = new THREE.Mesh(headGeo, [
     skinMat, skinMat, agentMat, skinMat, skinMat, skinMat,
   ]);
@@ -413,54 +418,204 @@ function createAgent(
   head.castShadow = true;
   group.add(head);
 
-  // Eyes (tiny black cubes on front face)
-  const eyeGeo = new THREE.BoxGeometry(0.08, 0.08, 0.05);
+  // Eyes (Minecraft-style 2-pixel wide black squares)
+  const eyeGeo = new THREE.BoxGeometry(0.1, 0.06, 0.05);
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-  leftEye.position.set(-0.12, 1.85, 0.31);
+  leftEye.position.set(-0.13, 1.83, 0.31);
   group.add(leftEye);
   const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-  rightEye.position.set(0.12, 1.85, 0.31);
+  rightEye.position.set(0.13, 1.83, 0.31);
   group.add(rightEye);
 
-  // Body (0.6 x 0.8 x 0.4)
+  // Mouth (tiny line)
+  const mouthGeo = new THREE.BoxGeometry(0.12, 0.03, 0.05);
+  const mouthMat = new THREE.MeshBasicMaterial({ color: 0x4a3728 });
+  const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+  mouth.position.set(0, 1.72, 0.31);
+  group.add(mouth);
+
+  // ═══ ROLE-SPECIFIC HAT ═══
+  let hat: THREE.Mesh;
+  const hatMat = new THREE.MeshLambertMaterial({ color: agentColor.clone().multiplyScalar(1.2) });
+
+  switch (agent.role) {
+    case "CEO": {
+      // Crown
+      const crownGeo = new THREE.BoxGeometry(0.65, 0.2, 0.65);
+      hat = new THREE.Mesh(crownGeo, new THREE.MeshLambertMaterial({ color: 0xffd700 }));
+      hat.position.y = 2.2;
+      // Crown tips
+      const tipGeo = new THREE.BoxGeometry(0.12, 0.15, 0.12);
+      const tipMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+      const tips: [number, number, number][] = [[-0.2, 2.35, -0.2], [0.2, 2.35, -0.2], [-0.2, 2.35, 0.2], [0.2, 2.35, 0.2], [0, 2.38, 0]];
+      for (const [tx, ty, tz] of tips) {
+        const tip = new THREE.Mesh(tipGeo, tipMat);
+        tip.position.set(tx, ty, tz);
+        group.add(tip);
+      }
+      break;
+    }
+    case "Factory": {
+      // Hard hat
+      const hardHatGeo = new THREE.BoxGeometry(0.7, 0.25, 0.7);
+      hat = new THREE.Mesh(hardHatGeo, new THREE.MeshLambertMaterial({ color: 0xffaa00 }));
+      hat.position.y = 2.18;
+      break;
+    }
+    case "Content": {
+      // Beret
+      const beretGeo = new THREE.BoxGeometry(0.65, 0.15, 0.65);
+      hat = new THREE.Mesh(beretGeo, new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+      hat.position.y = 2.15;
+      break;
+    }
+    case "SEO": {
+      // Headband with magnifying glass
+      const bandGeo = new THREE.BoxGeometry(0.62, 0.1, 0.62);
+      hat = new THREE.Mesh(bandGeo, new THREE.MeshLambertMaterial({ color: 0xec4899 }));
+      hat.position.y = 2.15;
+      break;
+    }
+    case "Data": {
+      // Wizard hat
+      const wizGeo = new THREE.BoxGeometry(0.5, 0.4, 0.5);
+      hat = new THREE.Mesh(wizGeo, new THREE.MeshLambertMaterial({ color: 0x8b5cf6 }));
+      hat.position.y = 2.3;
+      const wizTip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.3, 0.25),
+        new THREE.MeshLambertMaterial({ color: 0x8b5cf6 })
+      );
+      wizTip.position.y = 2.65;
+      group.add(wizTip);
+      break;
+    }
+    case "Research": {
+      // Explorer hat
+      const explorerGeo = new THREE.BoxGeometry(0.75, 0.12, 0.75);
+      hat = new THREE.Mesh(explorerGeo, new THREE.MeshLambertMaterial({ color: 0x8b6914 }));
+      hat.position.y = 2.14;
+      const topHat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.2, 0.45),
+        new THREE.MeshLambertMaterial({ color: 0x8b6914 })
+      );
+      topHat.position.y = 2.28;
+      group.add(topHat);
+      break;
+    }
+    case "QA": {
+      // Shield helmet (red visor)
+      const helmetGeo = new THREE.BoxGeometry(0.65, 0.25, 0.65);
+      hat = new THREE.Mesh(helmetGeo, new THREE.MeshLambertMaterial({ color: 0xcc0000 }));
+      hat.position.y = 2.18;
+      break;
+    }
+    default: {
+      const defaultGeo = new THREE.BoxGeometry(0.65, 0.15, 0.65);
+      hat = new THREE.Mesh(defaultGeo, hatMat);
+      hat.position.y = 2.15;
+    }
+  }
+  hat.castShadow = true;
+  group.add(hat);
+
+  // ═══ BODY (Minecraft torso: 0.6 x 0.8 x 0.4) ═══
   const bodyGeo = new THREE.BoxGeometry(0.6, 0.8, 0.4);
   const body = new THREE.Mesh(bodyGeo, agentMat);
   body.position.y = 1.1;
   body.castShadow = true;
   group.add(body);
 
-  // Arms (0.2 x 0.8 x 0.3)
-  const armGeo = new THREE.BoxGeometry(0.2, 0.7, 0.3);
+  // Belt detail
+  const beltGeo = new THREE.BoxGeometry(0.62, 0.08, 0.42);
+  const beltMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+  const belt = new THREE.Mesh(beltGeo, beltMat);
+  belt.position.y = 0.75;
+  group.add(belt);
 
-  const leftArm = new THREE.Mesh(armGeo, darkMat);
-  leftArm.position.set(-0.4, 1.1, 0);
+  // ═══ ARMS (0.2 x 0.7 x 0.3) — pivot from shoulder ═══
+  const armGeo = new THREE.BoxGeometry(0.2, 0.7, 0.3);
+  // Shift arm geometry so it rotates from the top (shoulder)
+  armGeo.translate(0, -0.35, 0);
+
+  const leftArm = new THREE.Mesh(armGeo.clone(), darkMat);
+  leftArm.position.set(-0.4, 1.45, 0);
   leftArm.castShadow = true;
   group.add(leftArm);
 
-  const rightArm = new THREE.Mesh(armGeo, darkMat);
-  rightArm.position.set(0.4, 1.1, 0);
+  const rightArm = new THREE.Mesh(armGeo.clone(), darkMat);
+  rightArm.position.set(0.4, 1.45, 0);
   rightArm.castShadow = true;
   group.add(rightArm);
 
-  // Legs (0.25 x 0.7 x 0.3)
+  // ═══ HELD ITEM (role-specific) ═══
+  let item: THREE.Mesh | null = null;
+  switch (agent.role) {
+    case "CEO": {
+      // Scepter
+      const scepterGeo = new THREE.BoxGeometry(0.08, 0.6, 0.08);
+      item = new THREE.Mesh(scepterGeo, new THREE.MeshLambertMaterial({ color: 0xffd700 }));
+      item.position.set(0.4, 0.9, 0.3);
+      break;
+    }
+    case "Factory": {
+      // Wrench
+      const wrenchGeo = new THREE.BoxGeometry(0.08, 0.5, 0.08);
+      item = new THREE.Mesh(wrenchGeo, new THREE.MeshLambertMaterial({ color: 0xaaaaaa }));
+      item.position.set(0.4, 0.9, 0.3);
+      break;
+    }
+    case "Data": {
+      // Wand
+      const wandGeo = new THREE.BoxGeometry(0.06, 0.5, 0.06);
+      item = new THREE.Mesh(wandGeo, new THREE.MeshLambertMaterial({ color: 0xcc88ff }));
+      item.position.set(0.4, 0.9, 0.3);
+      break;
+    }
+    case "Research": {
+      // Compass
+      const compassGeo = new THREE.BoxGeometry(0.15, 0.15, 0.05);
+      item = new THREE.Mesh(compassGeo, new THREE.MeshLambertMaterial({ color: 0xdddddd }));
+      item.position.set(0.4, 0.9, 0.3);
+      break;
+    }
+    default:
+      item = null;
+  }
+  if (item) {
+    item.castShadow = true;
+    group.add(item);
+  }
+
+  // ═══ LEGS (0.25 x 0.7 x 0.3) — pivot from hip ═══
   const legGeo = new THREE.BoxGeometry(0.25, 0.7, 0.3);
+  legGeo.translate(0, -0.35, 0);
   const legMat = new THREE.MeshLambertMaterial({ color: 0x333355 });
 
-  const leftLeg = new THREE.Mesh(legGeo, legMat);
-  leftLeg.position.set(-0.15, 0.35, 0);
+  const leftLeg = new THREE.Mesh(legGeo.clone(), legMat);
+  leftLeg.position.set(-0.15, 0.7, 0);
   leftLeg.castShadow = true;
   group.add(leftLeg);
 
-  const rightLeg = new THREE.Mesh(legGeo, legMat);
-  rightLeg.position.set(0.15, 0.35, 0);
+  const rightLeg = new THREE.Mesh(legGeo.clone(), legMat);
+  rightLeg.position.set(0.15, 0.7, 0);
   rightLeg.castShadow = true;
   group.add(rightLeg);
 
-  // Position group
+  // ═══ SHOES (small cubes at feet) ═══
+  const shoeGeo = new THREE.BoxGeometry(0.27, 0.12, 0.35);
+  const shoeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  leftShoe.position.set(-0.15, 0.06, 0.02);
+  group.add(leftShoe);
+  const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  rightShoe.position.set(0.15, 0.06, 0.02);
+  group.add(rightShoe);
+
+  // Position
   group.position.set(agent.position[0], agent.position[1], agent.position[2]);
 
-  // Name label (CSS2D)
+  // ═══ NAME LABEL ═══
   const labelDiv = document.createElement("div");
   labelDiv.className = "agent-label";
   labelDiv.textContent = `${agent.name} - ${agent.role}`;
@@ -478,13 +633,12 @@ function createAgent(
     text-shadow: 0 0 4px ${agent.color};
   `;
   const label = new CSS2DObject(labelDiv);
-  label.position.set(0, 2.4, 0);
+  label.position.set(0, 2.8, 0); // Higher because of hats
   group.add(label);
 
-  // Random animation offset
   const offset = Math.random() * Math.PI * 2;
 
-  return { group, head, body, leftArm, rightArm, leftLeg, rightLeg, label, offset };
+  return { group, head, body, leftArm, rightArm, leftLeg, rightLeg, hat, item, label, offset, roleId: agent.role };
 }
 
 // ─── Animate an agent with idle animations ───────────────────────────
@@ -495,25 +649,63 @@ function animateAgent(parts: AgentParts, time: number): void {
   parts.body.scale.y = 1 + Math.sin(t * 1.5) * 0.02;
   parts.body.position.y = 1.1 + Math.sin(t * 1.5) * 0.01;
 
-  // Head position follows body breathing
+  // Head follows body breathing
   parts.head.position.y = 1.8 + Math.sin(t * 1.5) * 0.01;
 
-  // Head gentle rotation (look around)
-  parts.head.rotation.y = Math.sin(t * 0.5) * 0.3;
+  // Head look around (role-specific speed)
+  const lookSpeed = parts.roleId === "Research" ? 0.8 : 0.5;
+  parts.head.rotation.y = Math.sin(t * lookSpeed) * 0.3;
   parts.head.rotation.x = Math.sin(t * 0.3) * 0.05;
 
   // Gentle body sway
   parts.group.rotation.y = Math.sin(t * 0.25) * 0.05;
 
-  // Arm swing (subtle idle)
-  parts.leftArm.rotation.x = Math.sin(t * 0.8) * 0.15;
-  parts.rightArm.rotation.x = Math.sin(t * 0.8 + Math.PI) * 0.15;
+  // Arm swing from shoulder pivot
+  parts.leftArm.rotation.x = Math.sin(t * 0.8) * 0.2;
+  parts.rightArm.rotation.x = Math.sin(t * 0.8 + Math.PI) * 0.2;
   parts.leftArm.rotation.z = -0.05 + Math.sin(t * 0.6) * 0.03;
   parts.rightArm.rotation.z = 0.05 - Math.sin(t * 0.6) * 0.03;
 
-  // Leg subtle shift
-  parts.leftLeg.rotation.x = Math.sin(t * 0.7) * 0.04;
-  parts.rightLeg.rotation.x = Math.sin(t * 0.7 + Math.PI) * 0.04;
+  // Leg subtle shift from hip pivot
+  parts.leftLeg.rotation.x = Math.sin(t * 0.7) * 0.06;
+  parts.rightLeg.rotation.x = Math.sin(t * 0.7 + Math.PI) * 0.06;
+
+  // Hat bob
+  if (parts.hat) {
+    parts.hat.position.y = (parts.hat.position.y > 2.15 ? parts.hat.position.y : 2.15) + Math.sin(t * 1.5) * 0.01;
+  }
+
+  // Role-specific animations
+  switch (parts.roleId) {
+    case "CEO":
+      // Regal head movement, slower
+      parts.head.rotation.y = Math.sin(t * 0.3) * 0.2;
+      break;
+    case "Factory":
+      // Working arm movement (like hammering)
+      parts.rightArm.rotation.x = Math.sin(t * 2) * 0.3;
+      break;
+    case "Content":
+      // Creative hand gestures
+      parts.leftArm.rotation.z = -0.1 + Math.sin(t * 1.2) * 0.1;
+      parts.rightArm.rotation.z = 0.1 - Math.sin(t * 1.2 + 1) * 0.1;
+      break;
+    case "Data":
+      // Mystical wand wave
+      parts.rightArm.rotation.x = Math.sin(t * 1.5) * 0.25;
+      parts.rightArm.rotation.z = 0.1 + Math.sin(t * 0.8) * 0.1;
+      break;
+    case "Research":
+      // Looking around actively
+      parts.head.rotation.y = Math.sin(t * 1.2) * 0.4;
+      parts.head.rotation.x = Math.sin(t * 0.8) * 0.1;
+      break;
+    case "QA":
+      // Alert stance, checking
+      parts.head.rotation.x = Math.sin(t * 0.5) * 0.08;
+      parts.rightArm.rotation.x = -0.3 + Math.sin(t * 0.4) * 0.05;
+      break;
+  }
 }
 
 // ─── Day/Night cycle helpers (Colombo, Sri Lanka — UTC+5:30) ────────
