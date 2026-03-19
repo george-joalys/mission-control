@@ -65,7 +65,7 @@ function createGrassBlock(size = 1): THREE.Mesh {
 
 // ─── Create the ground plane with Minecraft blocks ───────────────────
 function createGround(scene: THREE.Scene): void {
-  const gridSize = 14; // Slightly larger for jungle feel
+  const gridSize = 30; // Expanded from 14 to 30 for ~60x60 map
   const pathMat = new THREE.MeshLambertMaterial({ color: 0x8b6914 }); // Dirt path
   const dirtMat = new THREE.MeshLambertMaterial({ color: 0x6b4423 });
 
@@ -377,6 +377,552 @@ function createBush(scene: THREE.Scene, x: number, z: number): void {
       scene.add(bush);
     }
   }
+}
+
+// ─── Create a Mine at edges ──────────────────────────────────────────
+interface MineData {
+  diamonds: THREE.Mesh[];
+}
+
+function createMine(scene: THREE.Scene, x: number, z: number): MineData {
+  const darkStoneMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0x505050 });
+  const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+  const diamonds: THREE.Mesh[] = [];
+
+  // Build the mine entrance structure (3x3 opening facing center of map)
+  // Determine which direction the mine faces based on position
+  const facingX = x !== 0;
+  const dirX = x > 0 ? -1 : 1;
+  const dirZ = z > 0 ? -1 : 1;
+
+  // Stone frame around the 3x3 opening
+  for (let a = -2; a <= 2; a++) {
+    for (let y = 0; y <= 4; y++) {
+      // Only build the frame (border), not the inner 3x3 opening
+      const isOpening = Math.abs(a) <= 1 && y >= 0 && y <= 2;
+      if (isOpening) continue;
+
+      const mat = (a + y) % 2 === 0 ? darkStoneMat : stoneMat;
+      const block = new THREE.Mesh(blockGeo, mat);
+      if (facingX) {
+        block.position.set(x, y + 0.5, z + a);
+      } else {
+        block.position.set(x + a, y + 0.5, z);
+      }
+      block.castShadow = true;
+      scene.add(block);
+    }
+  }
+
+  // Tunnel depth (3 blocks deep)
+  for (let d = 1; d <= 3; d++) {
+    for (let a = -2; a <= 2; a++) {
+      for (let y = 0; y <= 4; y++) {
+        const isOpening = Math.abs(a) <= 1 && y >= 0 && y <= 2;
+        if (isOpening) continue;
+
+        const mat = (a + y + d) % 2 === 0 ? darkStoneMat : stoneMat;
+        const block = new THREE.Mesh(blockGeo, mat);
+        if (facingX) {
+          block.position.set(x + d * (-dirX), y + 0.5, z + a);
+        } else {
+          block.position.set(x + a, y + 0.5, z + d * (-dirZ));
+        }
+        block.castShadow = true;
+        scene.add(block);
+      }
+    }
+    // Ceiling for tunnel
+    for (let a = -1; a <= 1; a++) {
+      const ceilBlock = new THREE.Mesh(blockGeo, darkStoneMat);
+      if (facingX) {
+        ceilBlock.position.set(x + d * (-dirX), 3.5, z + a);
+      } else {
+        ceilBlock.position.set(x + a, 3.5, z + d * (-dirZ));
+      }
+      scene.add(ceilBlock);
+    }
+  }
+
+  // 6 diamonds per mine
+  const diamondMat = new THREE.MeshLambertMaterial({
+    color: 0x00bfff,
+    transparent: true,
+    opacity: 0.8,
+  });
+
+  const diamondOffsets: [number, number, number][] = [
+    [-1.5, 1.5, 0.5], [1.5, 1.5, 0.5], [0, 2.5, -0.5],
+    [-1, 0.5, 1], [1, 0.5, 1], [0, 3.5, 0],
+  ];
+
+  for (const [dx, dy, dz] of diamondOffsets) {
+    const diamondGeo = new THREE.IcosahedronGeometry(0.15);
+    const diamond = new THREE.Mesh(diamondGeo, diamondMat.clone());
+    if (facingX) {
+      diamond.position.set(x + dz * dirX, dy, z + dx);
+    } else {
+      diamond.position.set(x + dx, dy, z + dz * dirZ);
+    }
+    diamond.castShadow = true;
+    scene.add(diamond);
+    diamonds.push(diamond);
+  }
+
+  return { diamonds };
+}
+
+// ─── Create Miner NPC ────────────────────────────────────────────────
+interface MinerData {
+  group: THREE.Group;
+  rightArm: THREE.Mesh;
+  offset: number;
+}
+
+function createMiner(scene: THREE.Scene, position: [number, number, number]): MinerData {
+  const group = new THREE.Group();
+  const offset = Math.random() * Math.PI * 2;
+
+  // Miner body colors
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x6b5b3a }); // brown clothing
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x555555 }); // gray pants
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xdeb887 }); // skin
+  const helmetMat = new THREE.MeshLambertMaterial({ color: 0xccaa00 }); // yellow helmet
+
+  // Head
+  const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+  const head = new THREE.Mesh(headGeo, skinMat);
+  head.position.y = 1.55;
+  head.castShadow = true;
+  group.add(head);
+
+  // Helmet
+  const helmetGeo = new THREE.BoxGeometry(0.55, 0.2, 0.55);
+  const helmet = new THREE.Mesh(helmetGeo, helmetMat);
+  helmet.position.y = 1.85;
+  helmet.castShadow = true;
+  group.add(helmet);
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(0.5, 0.65, 0.35);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.95;
+  body.castShadow = true;
+  group.add(body);
+
+  // Left arm
+  const armGeo = new THREE.BoxGeometry(0.18, 0.6, 0.25);
+  const leftArmGeo = armGeo.clone();
+  leftArmGeo.translate(0, -0.3, 0);
+  const leftArm = new THREE.Mesh(leftArmGeo, bodyMat);
+  leftArm.position.set(-0.34, 1.25, 0);
+  leftArm.castShadow = true;
+  group.add(leftArm);
+
+  // Right arm (animated for mining)
+  const rightArmGeo = armGeo.clone();
+  rightArmGeo.translate(0, -0.3, 0);
+  const rightArm = new THREE.Mesh(rightArmGeo, bodyMat);
+  rightArm.position.set(0.34, 1.25, 0);
+  rightArm.castShadow = true;
+  group.add(rightArm);
+
+  // Pickaxe in right hand
+  const pickGeo = new THREE.BoxGeometry(0.06, 0.45, 0.06);
+  const pickMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+  const pick = new THREE.Mesh(pickGeo, pickMat);
+  pick.position.set(0.34, 0.7, 0.2);
+  pick.castShadow = true;
+  group.add(pick);
+
+  // Legs
+  const legGeoShape = new THREE.BoxGeometry(0.2, 0.55, 0.25);
+  const leftLegGeo = legGeoShape.clone();
+  leftLegGeo.translate(0, -0.275, 0);
+  const leftLeg = new THREE.Mesh(leftLegGeo, legMat);
+  leftLeg.position.set(-0.12, 0.6, 0);
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+
+  const rightLegGeo = legGeoShape.clone();
+  rightLegGeo.translate(0, -0.275, 0);
+  const rightLeg = new THREE.Mesh(rightLegGeo, legMat);
+  rightLeg.position.set(0.12, 0.6, 0);
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
+
+  group.position.set(position[0], position[1], position[2]);
+  scene.add(group);
+
+  return { group, rightArm, offset };
+}
+
+// ─── Create Waterfall ────────────────────────────────────────────────
+interface WaterfallData {
+  blocks: THREE.Mesh[];
+  baseY: number;
+  height: number;
+}
+
+function createWaterfall(scene: THREE.Scene, x: number, z: number): WaterfallData {
+  const waterMat = new THREE.MeshLambertMaterial({
+    color: 0x4488ff,
+    transparent: true,
+    opacity: 0.7,
+  });
+
+  const blocks: THREE.Mesh[] = [];
+  const height = 10;
+
+  // Stack of water blocks
+  for (let i = 0; i < height; i++) {
+    const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const block = new THREE.Mesh(geo, waterMat.clone());
+    block.position.set(x, i * 0.8 + 0.4, z);
+    block.castShadow = false;
+    scene.add(block);
+    blocks.push(block);
+  }
+
+  // Some rocks at the base
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+  const rockPositions: [number, number, number][] = [
+    [x - 0.6, 0.2, z + 0.5],
+    [x + 0.6, 0.15, z + 0.3],
+    [x, 0.1, z + 0.7],
+    [x - 0.3, 0.15, z - 0.5],
+    [x + 0.4, 0.2, z - 0.4],
+  ];
+  for (const [rx, ry, rz] of rockPositions) {
+    const rockGeo = new THREE.BoxGeometry(
+      0.4 + Math.random() * 0.3,
+      0.3 + Math.random() * 0.2,
+      0.4 + Math.random() * 0.3
+    );
+    const rock = new THREE.Mesh(rockGeo, rockMat);
+    rock.position.set(rx, ry, rz);
+    rock.castShadow = true;
+    scene.add(rock);
+  }
+
+  // Water pool at base
+  const poolMat = new THREE.MeshLambertMaterial({
+    color: 0x3377ee,
+    transparent: true,
+    opacity: 0.5,
+  });
+  for (let px = -1; px <= 1; px++) {
+    for (let pz = -1; pz <= 1; pz++) {
+      const poolGeo = new THREE.BoxGeometry(1, 0.2, 1);
+      const pool = new THREE.Mesh(poolGeo, poolMat);
+      pool.position.set(x + px, 0.1, z + pz);
+      scene.add(pool);
+    }
+  }
+
+  return { blocks, baseY: 0.4, height };
+}
+
+// ─── Create Pig ──────────────────────────────────────────────────────
+interface AnimalData {
+  group: THREE.Group;
+  offset: number;
+  baseX: number;
+  baseZ: number;
+}
+
+function createPig(scene: THREE.Scene, x: number, z: number): AnimalData {
+  const group = new THREE.Group();
+  const pinkMat = new THREE.MeshLambertMaterial({ color: 0xffaaaa });
+  const darkPinkMat = new THREE.MeshLambertMaterial({ color: 0xee8888 });
+  const offset = Math.random() * Math.PI * 2;
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(0.7, 0.5, 1.0);
+  const body = new THREE.Mesh(bodyGeo, pinkMat);
+  body.position.y = 0.45;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.BoxGeometry(0.45, 0.4, 0.4);
+  const head = new THREE.Mesh(headGeo, pinkMat);
+  head.position.set(0, 0.55, 0.6);
+  head.castShadow = true;
+  group.add(head);
+
+  // Snout
+  const snoutGeo = new THREE.BoxGeometry(0.2, 0.15, 0.1);
+  const snout = new THREE.Mesh(snoutGeo, darkPinkMat);
+  snout.position.set(0, 0.48, 0.82);
+  group.add(snout);
+
+  // Eyes
+  const eyeGeo = new THREE.BoxGeometry(0.06, 0.06, 0.05);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.12, 0.62, 0.81);
+  group.add(leftEye);
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.12, 0.62, 0.81);
+  group.add(rightEye);
+
+  // 4 legs
+  const legGeo = new THREE.BoxGeometry(0.15, 0.25, 0.15);
+  const legPositions: [number, number, number][] = [
+    [-0.22, 0.12, -0.35],
+    [0.22, 0.12, -0.35],
+    [-0.22, 0.12, 0.35],
+    [0.22, 0.12, 0.35],
+  ];
+  for (const [lx, ly, lz] of legPositions) {
+    const leg = new THREE.Mesh(legGeo, pinkMat);
+    leg.position.set(lx, ly, lz);
+    leg.castShadow = true;
+    group.add(leg);
+  }
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+
+  return { group, offset, baseX: x, baseZ: z };
+}
+
+// ─── Create Cow ──────────────────────────────────────────────────────
+function createCow(scene: THREE.Scene, x: number, z: number): AnimalData {
+  const group = new THREE.Group();
+  const brownMat = new THREE.MeshLambertMaterial({ color: 0x8b6914 });
+  const whiteMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+  const offset = Math.random() * Math.PI * 2;
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(0.8, 0.6, 1.2);
+  const body = new THREE.Mesh(bodyGeo, brownMat);
+  body.position.y = 0.55;
+  body.castShadow = true;
+  group.add(body);
+
+  // White patches on body
+  const patchGeo1 = new THREE.BoxGeometry(0.3, 0.25, 0.42);
+  const patch1 = new THREE.Mesh(patchGeo1, whiteMat);
+  patch1.position.set(-0.28, 0.6, 0.1);
+  group.add(patch1);
+  const patchGeo2 = new THREE.BoxGeometry(0.25, 0.2, 0.35);
+  const patch2 = new THREE.Mesh(patchGeo2, whiteMat);
+  patch2.position.set(0.3, 0.5, -0.3);
+  group.add(patch2);
+
+  // Head
+  const headGeo = new THREE.BoxGeometry(0.5, 0.45, 0.45);
+  const head = new THREE.Mesh(headGeo, brownMat);
+  head.position.set(0, 0.65, 0.75);
+  head.castShadow = true;
+  group.add(head);
+
+  // Eyes
+  const eyeGeo = new THREE.BoxGeometry(0.06, 0.06, 0.05);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.14, 0.72, 0.98);
+  group.add(leftEye);
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.14, 0.72, 0.98);
+  group.add(rightEye);
+
+  // Horns
+  const hornGeo = new THREE.BoxGeometry(0.06, 0.15, 0.06);
+  const hornMat = new THREE.MeshLambertMaterial({ color: 0xccccaa });
+  const leftHorn = new THREE.Mesh(hornGeo, hornMat);
+  leftHorn.position.set(-0.2, 0.95, 0.75);
+  group.add(leftHorn);
+  const rightHorn = new THREE.Mesh(hornGeo, hornMat);
+  rightHorn.position.set(0.2, 0.95, 0.75);
+  group.add(rightHorn);
+
+  // 4 legs
+  const legGeo = new THREE.BoxGeometry(0.18, 0.35, 0.18);
+  const legPositions: [number, number, number][] = [
+    [-0.25, 0.17, -0.4],
+    [0.25, 0.17, -0.4],
+    [-0.25, 0.17, 0.4],
+    [0.25, 0.17, 0.4],
+  ];
+  for (const [lx, ly, lz] of legPositions) {
+    const leg = new THREE.Mesh(legGeo, brownMat);
+    leg.position.set(lx, ly, lz);
+    leg.castShadow = true;
+    group.add(leg);
+  }
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+
+  return { group, offset, baseX: x, baseZ: z };
+}
+
+// ─── Create Chicken ──────────────────────────────────────────────────
+function createChicken(scene: THREE.Scene, x: number, z: number): AnimalData {
+  const group = new THREE.Group();
+  const whiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const orangeMat = new THREE.MeshLambertMaterial({ color: 0xff8800 });
+  const redMat = new THREE.MeshLambertMaterial({ color: 0xcc0000 });
+  const offset = Math.random() * Math.PI * 2;
+
+  // Body (small)
+  const bodyGeo = new THREE.BoxGeometry(0.35, 0.3, 0.45);
+  const body = new THREE.Mesh(bodyGeo, whiteMat);
+  body.position.y = 0.35;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+  const head = new THREE.Mesh(headGeo, whiteMat);
+  head.position.set(0, 0.55, 0.3);
+  head.castShadow = true;
+  group.add(head);
+
+  // Beak
+  const beakGeo = new THREE.BoxGeometry(0.1, 0.06, 0.1);
+  const beak = new THREE.Mesh(beakGeo, orangeMat);
+  beak.position.set(0, 0.5, 0.47);
+  group.add(beak);
+
+  // Comb (red on top)
+  const combGeo = new THREE.BoxGeometry(0.08, 0.1, 0.12);
+  const comb = new THREE.Mesh(combGeo, redMat);
+  comb.position.set(0, 0.72, 0.3);
+  group.add(comb);
+
+  // Eyes
+  const eyeGeo = new THREE.BoxGeometry(0.04, 0.04, 0.03);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.08, 0.58, 0.43);
+  group.add(leftEye);
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.08, 0.58, 0.43);
+  group.add(rightEye);
+
+  // 2 legs (thin orange sticks)
+  const legGeo = new THREE.BoxGeometry(0.05, 0.2, 0.05);
+  const leftLeg = new THREE.Mesh(legGeo, orangeMat);
+  leftLeg.position.set(-0.08, 0.1, 0);
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+  const rightLeg = new THREE.Mesh(legGeo, orangeMat);
+  rightLeg.position.set(0.08, 0.1, 0);
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
+
+  // Tail feathers
+  const tailGeo = new THREE.BoxGeometry(0.15, 0.2, 0.1);
+  const tail = new THREE.Mesh(tailGeo, whiteMat);
+  tail.position.set(0, 0.45, -0.25);
+  tail.rotation.x = -0.3;
+  group.add(tail);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+
+  return { group, offset, baseX: x, baseZ: z };
+}
+
+// ─── Create Birds (flying) ──────────────────────────────────────────
+interface BirdData {
+  mesh: THREE.Mesh;
+  phase: number;
+}
+
+function createBirds(scene: THREE.Scene): BirdData[] {
+  const birds: BirdData[] = [];
+  const birdMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+
+  for (let i = 0; i < 8; i++) {
+    const birdGeo = new THREE.BoxGeometry(0.2, 0.1, 0.2);
+    const bird = new THREE.Mesh(birdGeo, birdMat);
+    const phase = (i / 8) * Math.PI * 2;
+    // Set initial position in elliptical pattern
+    bird.position.set(
+      10 * Math.cos(phase),
+      15,
+      8 * Math.sin(phase)
+    );
+    bird.castShadow = false;
+    scene.add(bird);
+    birds.push({ mesh: bird, phase });
+  }
+
+  return birds;
+}
+
+// ─── Create Clouds ──────────────────────────────────────────────────
+interface CloudData {
+  group: THREE.Group;
+  speed: number;
+}
+
+function createClouds(scene: THREE.Scene): CloudData[] {
+  const clouds: CloudData[] = [];
+  const cloudMat = new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  const cloudConfigs: { x: number; y: number; z: number; blocks: [number, number, number, number, number, number][]; speed: number }[] = [
+    {
+      x: -15, y: 18, z: -10, speed: 0.3,
+      blocks: [
+        [0, 0, 0, 3, 1, 2], [2, 0, 0.5, 2, 1, 2], [-1.5, 0, -0.3, 2, 1, 1.5],
+        [1, 0.5, 0, 2, 0.7, 1.5], [-0.5, 0.3, 0.3, 2.5, 0.6, 1.5],
+      ],
+    },
+    {
+      x: 10, y: 20, z: -5, speed: 0.2,
+      blocks: [
+        [0, 0, 0, 2.5, 1, 2], [2, 0, 0.3, 2, 1, 1.5], [-1, 0, 0, 2, 1, 2],
+        [0.5, 0.4, 0, 2, 0.7, 1.5], [1.5, 0, -0.5, 1.5, 0.8, 1.5], [-0.5, 0.3, 0.5, 1.5, 0.6, 1],
+      ],
+    },
+    {
+      x: -5, y: 22, z: 15, speed: 0.25,
+      blocks: [
+        [0, 0, 0, 3, 1, 2], [2.5, 0, 0, 2, 1, 1.5], [-1.5, 0, 0.3, 2, 1, 1.5],
+        [0.5, 0.5, 0, 2, 0.6, 1.5],
+      ],
+    },
+    {
+      x: 20, y: 19, z: 8, speed: 0.35,
+      blocks: [
+        [0, 0, 0, 2, 1, 2], [1.5, 0, 0, 2, 1, 1.5], [-1, 0, 0.2, 2.5, 1, 2],
+        [0.3, 0.4, 0, 2, 0.7, 1.5], [1, 0.3, -0.3, 1.5, 0.6, 1],
+      ],
+    },
+    {
+      x: -20, y: 21, z: 0, speed: 0.15,
+      blocks: [
+        [0, 0, 0, 3, 1, 2.5], [2.5, 0, 0.5, 2, 1, 2], [-2, 0, -0.3, 2, 1, 2],
+        [0, 0.5, 0, 2.5, 0.7, 2], [1.5, 0.3, 0.3, 2, 0.6, 1.5], [-1, 0.4, 0, 2, 0.5, 1.5],
+      ],
+    },
+  ];
+
+  for (const config of cloudConfigs) {
+    const group = new THREE.Group();
+    for (const [bx, by, bz, w, h, d] of config.blocks) {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const block = new THREE.Mesh(geo, cloudMat);
+      block.position.set(bx, by, bz);
+      group.add(block);
+    }
+    group.position.set(config.x, config.y, config.z);
+    scene.add(group);
+    clouds.push({ group, speed: config.speed });
+  }
+
+  return clouds;
 }
 
 // ─── Create a Minecraft-style agent character ────────────────────────
@@ -815,15 +1361,12 @@ export function PixelOffice() {
     updateSkyBackground(canvas2d, bgTexture, initDayFactor);
     scene.background = bgTexture;
 
-    // Fog for depth — color adapts to day/night (jungle-green tinted)
-    const nightFogColor = new THREE.Color(0x0d1117);
-    const dayFogColor = new THREE.Color(0x1a3a1a);
-    const initFogColor = nightFogColor.clone().lerp(dayFogColor, initDayFactor);
-    scene.fog = new THREE.FogExp2(initFogColor.getHex(), 0.035);
+    // Fog — FogExp2 with density 0.04
+    scene.fog = new THREE.FogExp2(0x0d1117, 0.04);
 
     // ─── Camera ──────────────────────────────────────────────
     const aspect = container.clientWidth / container.clientHeight;
-    const camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 200);
     camera.position.set(10, 8, 12);
     camera.lookAt(0, 1, -2);
 
@@ -855,7 +1398,7 @@ export function PixelOffice() {
     controls.dampingFactor = 0.05;
     controls.target.set(0, 1.5, -2);
     controls.minDistance = 5;
-    controls.maxDistance = 30;
+    controls.maxDistance = 60;
     controls.maxPolarAngle = Math.PI / 2.1;
     controls.saveState();
     controlsRef.current = controls;
@@ -884,11 +1427,11 @@ export function PixelOffice() {
     mainLight.shadow.mapSize.width = 2048;
     mainLight.shadow.mapSize.height = 2048;
     mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 50;
-    mainLight.shadow.camera.left = -20;
-    mainLight.shadow.camera.right = 20;
-    mainLight.shadow.camera.top = 20;
-    mainLight.shadow.camera.bottom = -20;
+    mainLight.shadow.camera.far = 80;
+    mainLight.shadow.camera.left = -40;
+    mainLight.shadow.camera.right = 40;
+    mainLight.shadow.camera.top = 40;
+    mainLight.shadow.camera.bottom = -40;
     scene.add(mainLight);
 
     // Warm fill light from the building
@@ -913,6 +1456,11 @@ export function PixelOffice() {
       [-9, -8], [9, -8], [-8, 5], [8, 5],
       [-10, -2], [10, -2], [-7, 8], [7, 8],
       [-11, 3], [11, -4], [-6, -10], [6, 10],
+      // Additional trees for expanded map
+      [-18, -15], [18, -15], [-20, 10], [20, 10],
+      [-15, 18], [15, 18], [-22, -5], [22, -5],
+      [-16, -20], [16, 20], [-25, 0], [25, 12],
+      [-12, 22], [12, -22], [-20, -20], [20, -20],
     ];
     for (const [tx, tz] of normalTreePositions) {
       createTree(scene, tx, tz);
@@ -923,6 +1471,12 @@ export function PixelOffice() {
       [-13, 0], [13, 1], [-9, 10], [9, -10],
       [-12, -10], [12, -8], [-10, 8], [10, 6],
       [-7, -11], [8, 11],
+      // Additional jungle trees for expanded map
+      [-18, 14], [18, 14], [-22, -12], [22, -12],
+      [-25, 8], [25, 8], [-14, -18], [14, -18],
+      [-20, 18], [20, -18], [-28, 0], [28, 0],
+      [-16, 24], [16, -24], [-24, -18], [24, 18],
+      [-26, 12], [26, -12], [-22, 22], [22, -22],
     ];
     for (const [tx, tz] of jungleTreePositions) {
       createJungleTree(scene, tx, tz);
@@ -933,10 +1487,63 @@ export function PixelOffice() {
       [-4, 4], [4, 4], [-6, 2], [6, 2],
       [-3, 7], [3, 7], [-8, 0], [8, 0],
       [-5, 9], [5, -7], [-2, 5], [2, 6],
+      // Additional bushes for expanded map
+      [-15, 12], [15, 12], [-18, -8], [18, -8],
+      [-12, 16], [12, -16], [-20, 5], [20, -5],
+      [-8, 20], [8, -20], [-24, 3], [24, -3],
     ];
     for (const [bx, bz] of bushPositions) {
       createBush(scene, bx, bz);
     }
+
+    // ─── Mines at 4 edges ─────────────────────────────────────
+    const minePositions: [number, number][] = [
+      [-25, 0], [25, 0], [0, -25], [0, 25],
+    ];
+    const allDiamonds: THREE.Mesh[] = [];
+    for (const [mx, mz] of minePositions) {
+      const mineData = createMine(scene, mx, mz);
+      allDiamonds.push(...mineData.diamonds);
+    }
+
+    // ─── Miner NPCs (6-8 near mines) ─────────────────────────
+    const minerPositions: [number, number, number][] = [
+      [-23, 0, 1], [-23, 0, -1],
+      [23, 0, 1], [23, 0, -1],
+      [1, 0, -23], [-1, 0, -23],
+      [1, 0, 23], [-1, 0, 23],
+    ];
+    const miners: MinerData[] = [];
+    for (const pos of minerPositions) {
+      miners.push(createMiner(scene, pos));
+    }
+
+    // ─── Waterfall on one edge ───────────────────────────────
+    const waterfallData = createWaterfall(scene, -25, 15);
+
+    // ─── Animals ─────────────────────────────────────────────
+    const animals: AnimalData[] = [];
+
+    // Pigs (3)
+    animals.push(createPig(scene, 8, 12));
+    animals.push(createPig(scene, -10, 15));
+    animals.push(createPig(scene, 5, -14));
+
+    // Cows (3)
+    animals.push(createCow(scene, -12, -14));
+    animals.push(createCow(scene, 14, 8));
+    animals.push(createCow(scene, -6, 18));
+
+    // Chickens (3)
+    animals.push(createChicken(scene, 10, -10));
+    animals.push(createChicken(scene, -8, 12));
+    animals.push(createChicken(scene, 3, 16));
+
+    // ─── Birds (8 flying in elliptical pattern) ──────────────
+    const birds = createBirds(scene);
+
+    // ─── Clouds (5 clusters) ─────────────────────────────────
+    const clouds = createClouds(scene);
 
     // ─── Stars (tiny cubes in the sky — fade with day/night) ─
     const starGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
@@ -949,9 +1556,9 @@ export function PixelOffice() {
       });
       const star = new THREE.Mesh(starGeo, mat);
       star.position.set(
-        (Math.random() - 0.5) * 60,
-        15 + Math.random() * 15,
-        (Math.random() - 0.5) * 60
+        (Math.random() - 0.5) * 80,
+        15 + Math.random() * 20,
+        (Math.random() - 0.5) * 80
       );
       scene.add(star);
       stars.push(star);
@@ -977,13 +1584,78 @@ export function PixelOffice() {
     let frameId: number;
     const clock = new THREE.Clock();
 
+    // Color references for fog day/night
+    const nightFogColor = new THREE.Color(0x0d1117);
+    const dayFogColor = new THREE.Color(0x1a3a1a);
+
     function animate() {
       frameId = requestAnimationFrame(animate);
       const elapsed = clock.getElapsedTime();
+      const delta = clock.getDelta();
 
       // Animate agents
       for (const parts of agentParts) {
         animateAgent(parts, elapsed);
+      }
+
+      // ─── Animate diamonds (rotation + opacity oscillation) ─
+      for (const diamond of allDiamonds) {
+        diamond.rotation.y = elapsed * 2;
+        const mat = diamond.material as THREE.MeshLambertMaterial;
+        mat.opacity = 0.5 + 0.5 * Math.sin(elapsed * 3 + diamond.position.x);
+      }
+
+      // ─── Animate miners (arm swinging) ─────────────────────
+      for (const miner of miners) {
+        const t = elapsed + miner.offset;
+        // Mining swing animation on right arm (X axis rotation)
+        miner.rightArm.rotation.x = Math.sin(t * 3) * 0.6;
+      }
+
+      // ─── Animate waterfall blocks ──────────────────────────
+      for (let i = 0; i < waterfallData.blocks.length; i++) {
+        const block = waterfallData.blocks[i];
+        const baseYPos = waterfallData.baseY + i * 0.8;
+        // Each block slowly descends and loops back to top
+        const cyclePeriod = 3.0; // seconds for full cycle
+        const phaseOffset = i / waterfallData.blocks.length;
+        const t = ((elapsed / cyclePeriod + phaseOffset) % 1);
+        // Descend from top position to base, then loop
+        block.position.y = baseYPos - t * 0.5;
+        // Slight opacity variation for flowing effect
+        const mat = block.material as THREE.MeshLambertMaterial;
+        mat.opacity = 0.5 + 0.2 * Math.sin(elapsed * 4 + i);
+      }
+
+      // ─── Animate animals (random walk) ─────────────────────
+      for (const animal of animals) {
+        const t = elapsed + animal.offset;
+        animal.group.position.x = animal.baseX + Math.sin(t * 0.3) * 2;
+        animal.group.position.z = animal.baseZ + Math.sin(t * 0.25 + 1.5) * 2;
+        // Face direction of movement
+        animal.group.rotation.y = Math.atan2(
+          Math.cos(t * 0.3) * 0.3,
+          Math.cos(t * 0.25 + 1.5) * 0.25
+        );
+      }
+
+      // ─── Animate birds (elliptical flight) ─────────────────
+      for (const bird of birds) {
+        const t = elapsed * 0.5 + bird.phase;
+        bird.mesh.position.x = 10 * Math.cos(t);
+        bird.mesh.position.y = 15 + Math.sin(t * 2) * 0.5;
+        bird.mesh.position.z = 8 * Math.sin(t);
+        // Face the direction of flight
+        bird.mesh.rotation.y = -t + Math.PI / 2;
+      }
+
+      // ─── Animate clouds (drift on X axis) ─────────────────
+      for (const cloud of clouds) {
+        cloud.group.position.x += cloud.speed * 0.016; // ~60fps delta approximation
+        // Wrap around when too far
+        if (cloud.group.position.x > 40) {
+          cloud.group.position.x = -40;
+        }
       }
 
       // ─── Day/Night cycle (Colombo time) ──────────────────
@@ -1010,9 +1682,9 @@ export function PixelOffice() {
         (star.material as THREE.MeshBasicMaterial).opacity = 1 - dayFactor;
       }
 
-      // Update fog color
+      // Update fog color (keep FogExp2 with density 0.04)
       const fogColor = nightFogColor.clone().lerp(dayFogColor, dayFactor);
-      scene.fog = new THREE.FogExp2(fogColor.getHex(), 0.025);
+      scene.fog = new THREE.FogExp2(fogColor.getHex(), 0.04);
 
       // Tone mapping adapts
       renderer.toneMappingExposure = THREE.MathUtils.lerp(0.8, 1.2, dayFactor);
