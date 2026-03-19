@@ -21,15 +21,28 @@ interface Agent3D {
   position: [number, number, number];
 }
 
+// Agents en cercle rayon 10 autour du QG
+const R = 10;
 const AGENTS_3D: Agent3D[] = [
-  { id: "george", name: "George", role: "CEO", color: "#6366f1", position: [0, 0, 0] },
-  { id: "rex", name: "Rex", role: "Factory", color: "#10b981", position: [3, 0, 0] },
-  { id: "leo", name: "Leo", role: "Content", color: "#f59e0b", position: [-3, 0, 0] },
-  { id: "iris", name: "Iris", role: "SEO", color: "#ec4899", position: [0, 0, 3] },
-  { id: "atlas", name: "Atlas", role: "Data", color: "#8b5cf6", position: [3, 0, 3] },
-  { id: "scout", name: "Scout", role: "Research", color: "#06b6d4", position: [-3, 0, 3] },
-  { id: "hugo", name: "Hugo", role: "QA", color: "#ef4444", position: [0, 0, -3] },
+  { id: "george", name: "George", role: "CEO",      color: "#6366f1", position: [Math.cos(0)*R,           0, Math.sin(0)*R] },
+  { id: "rex",    name: "Rex",    role: "Factory",   color: "#f97316", position: [Math.cos(Math.PI*2/7)*R, 0, Math.sin(Math.PI*2/7)*R] },
+  { id: "leo",    name: "Leo",    role: "Content",   color: "#22c55e", position: [Math.cos(Math.PI*4/7)*R, 0, Math.sin(Math.PI*4/7)*R] },
+  { id: "iris",   name: "Iris",   role: "Analyst",   color: "#ec4899", position: [Math.cos(Math.PI*6/7)*R, 0, Math.sin(Math.PI*6/7)*R] },
+  { id: "atlas",  name: "Atlas",  role: "Library",   color: "#8b5cf6", position: [Math.cos(Math.PI*8/7)*R, 0, Math.sin(Math.PI*8/7)*R] },
+  { id: "scout",  name: "Scout",  role: "Trend",     color: "#06b6d4", position: [Math.cos(Math.PI*10/7)*R,0, Math.sin(Math.PI*10/7)*R] },
+  { id: "hugo",   name: "Hugo",   role: "Leads",     color: "#ef4444", position: [Math.cos(Math.PI*12/7)*R,0, Math.sin(Math.PI*12/7)*R] },
 ];
+
+// Bulles de dialogue par agent et par statut
+const AGENT_BUBBLES: Record<string, string[]> = {
+  george: ["📋 Briefing en cours...", "🧠 Analyse la situation", "📡 Coordination des agents", "✅ Tout sous contrôle"],
+  rex:    ["⚙️ Building...", "🔧 Debugging...", "🚀 Deploy en cours!", "💻 Code en review"],
+  leo:    ["✍️ Script en cours...", "🪝 Hook validé CGOVE", "📱 Brief du jour prêt", "💡 Nouvelle idée content"],
+  iris:   ["📊 Analyse les stats...", "🔍 Pattern détecté!", "📈 Score: 24/30", "⚠️ Flop à investiguer"],
+  atlas:  ["📚 Import Word en cours", "🗂️ Base de connaissance OK", "💾 Mémoire distillée", "📖 Frameworks extraits"],
+  scout:  ["👀 Veille Instagram...", "🔥 Trend détecté!", "📊 Concurrent analysé", "💡 Format viral trouvé"],
+  hugo:   ["🤝 Lead qualifié", "📧 Outreach en prépa", "🎯 Joaillier ciblé", "💼 Pipeline B2B actif"],
+};
 
 // ─── Minecraft-style block colors ────────────────────────────────────
 const COLORS = {
@@ -1164,14 +1177,14 @@ function createAgent(
   // ═══ NAME LABEL ═══
   const labelDiv = document.createElement("div");
   labelDiv.className = "agent-label";
-  labelDiv.textContent = `${agent.name} - ${agent.role}`;
+  labelDiv.textContent = agent.name; // Juste le prénom, pas le rôle
   labelDiv.style.cssText = `
     color: #fff;
     font-family: 'Courier New', monospace;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: bold;
-    background: rgba(0, 0, 0, 0.75);
-    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 1px 6px;
     border-radius: 3px;
     border: 1px solid ${agent.color};
     white-space: nowrap;
@@ -1179,8 +1192,32 @@ function createAgent(
     text-shadow: 0 0 4px ${agent.color};
   `;
   const label = new CSS2DObject(labelDiv);
-  label.position.set(0, 2.8, 0); // Higher because of hats
+  label.position.set(0, 2.8, 0);
   group.add(label);
+
+  // ═══ BULLE DE DIALOGUE ═══
+  const bubbleDiv = document.createElement("div");
+  bubbleDiv.className = "agent-bubble";
+  bubbleDiv.style.cssText = `
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    background: rgba(0,0,0,0.85);
+    padding: 3px 8px;
+    border-radius: 8px;
+    border: 1px solid ${agent.color}88;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+    max-width: 160px;
+  `;
+  const bubble = new CSS2DObject(bubbleDiv);
+  bubble.position.set(0, 3.6, 0);
+  group.add(bubble);
+  // Stocker la ref bubble sur le div pour l'animer
+  (labelDiv as unknown as Record<string, unknown>)["bubble"] = bubble;
+  (labelDiv as unknown as Record<string, unknown>)["agentId"] = agent.id;
 
   const offset = Math.random() * Math.PI * 2;
 
@@ -1632,9 +1669,26 @@ export function PixelOffice() {
       const elapsed = clock.getElapsedTime();
       const delta = clock.getDelta();
 
-      // Animate agents
-      for (const parts of agentParts) {
+      // Animate agents + bulles de dialogue
+      for (let i = 0; i < agentParts.length; i++) {
+        const parts = agentParts[i]!;
         animateAgent(parts, elapsed);
+
+        // Bulle de dialogue — change toutes les 4 secondes par agent
+        const agentId = AGENTS_3D[i]?.id ?? "george";
+        const bubbles = AGENT_BUBBLES[agentId] ?? [];
+        if (bubbles.length > 0) {
+          const bubbleIndex = Math.floor((elapsed + i * 1.5) / 4) % bubbles.length;
+          const showBubble = Math.sin((elapsed + i * 1.5) * (Math.PI / 4)) > 0.7;
+          const bubbleObj = parts.group.children.find(
+            (c) => c instanceof CSS2DObject && (c as CSS2DObject).element.className === "agent-bubble"
+          ) as CSS2DObject | undefined;
+          if (bubbleObj) {
+            const el = bubbleObj.element as HTMLElement;
+            el.textContent = bubbles[bubbleIndex] ?? "";
+            el.style.opacity = showBubble ? "1" : "0";
+          }
+        }
       }
 
       // ─── Animate gemmes au sol ──────────────────────────────
