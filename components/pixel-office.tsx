@@ -369,6 +369,71 @@ function animateAgent(parts: AgentParts, time: number): void {
   parts.rightLeg.rotation.x = Math.sin(t * 0.7 + Math.PI) * 0.04;
 }
 
+// ─── Day/Night cycle helpers (Colombo, Sri Lanka — UTC+5:30) ────────
+function getColomboHour(): number {
+  const now = new Date();
+  const utcH = now.getUTCHours();
+  const utcM = now.getUTCMinutes();
+  return (utcH + 5 + (utcM + 30) / 60) % 24;
+}
+
+function getDayNightFactor(hour: number): number {
+  // 0 = full night, 1 = full day
+  // Dawn: 5-7, Dusk: 17-19
+  if (hour >= 7 && hour <= 17) return 1;
+  if (hour >= 19 || hour <= 5) return 0;
+  if (hour > 5 && hour < 7) return (hour - 5) / 2;
+  return 1 - (hour - 17) / 2;
+}
+
+function updateSkyBackground(
+  canvas2d: HTMLCanvasElement,
+  bgTexture: THREE.CanvasTexture,
+  dayFactor: number
+): void {
+  const ctx = canvas2d.getContext("2d")!;
+  const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+
+  if (dayFactor >= 0.9) {
+    // Full day — blue sky
+    gradient.addColorStop(0, "#4682B4");
+    gradient.addColorStop(0.4, "#5a9fd4");
+    gradient.addColorStop(0.7, "#87CEEB");
+    gradient.addColorStop(1, "#b0e0e6");
+  } else if (dayFactor <= 0.1) {
+    // Full night — dark sky
+    gradient.addColorStop(0, "#0a0a1a");
+    gradient.addColorStop(0.4, "#111133");
+    gradient.addColorStop(0.7, "#1a1a3e");
+    gradient.addColorStop(1, "#0d1117");
+  } else {
+    // Dawn / Dusk — interpolate through orange/pink tones
+    const t = dayFactor;
+    // Blend between night top and day top
+    const r0 = Math.round(THREE.MathUtils.lerp(10, 70, t));
+    const g0 = Math.round(THREE.MathUtils.lerp(10, 130, t));
+    const b0 = Math.round(THREE.MathUtils.lerp(26, 180, t));
+
+    const r1 = Math.round(THREE.MathUtils.lerp(13, 176, t));
+    const g1 = Math.round(THREE.MathUtils.lerp(17, 224, t));
+    const b1 = Math.round(THREE.MathUtils.lerp(23, 230, t));
+
+    // Add warm dawn/dusk mid-tones
+    const warmR = Math.round(180 * Math.sin(t * Math.PI));
+    const warmG = Math.round(100 * Math.sin(t * Math.PI));
+    const warmB = Math.round(60 * Math.sin(t * Math.PI));
+
+    gradient.addColorStop(0, `rgb(${r0},${g0},${b0})`);
+    gradient.addColorStop(0.3, `rgb(${Math.min(255, r0 + warmR)},${Math.min(255, g0 + warmG)},${Math.min(255, b0 + warmB)})`);
+    gradient.addColorStop(0.6, `rgb(${Math.min(255, r1 + warmR)},${Math.min(255, g1 + warmG)},${Math.min(255, b1 + warmB)})`);
+    gradient.addColorStop(1, `rgb(${r1},${g1},${b1})`);
+  }
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 2, 256);
+  bgTexture.needsUpdate = true;
+}
+
 // ─── Main component ─────────────────────────────────────────────────
 export function PixelOffice() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -401,23 +466,21 @@ export function PixelOffice() {
     // ─── Scene setup ─────────────────────────────────────────
     const scene = new THREE.Scene();
 
-    // Dark sky gradient background
+    // Dynamic sky gradient background (Colombo day/night)
     const canvas2d = document.createElement("canvas");
     canvas2d.width = 2;
     canvas2d.height = 256;
-    const ctx = canvas2d.getContext("2d")!;
-    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-    gradient.addColorStop(0, "#0a0a1a");
-    gradient.addColorStop(0.4, "#111133");
-    gradient.addColorStop(0.7, "#1a1a3e");
-    gradient.addColorStop(1, "#0d1117");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 2, 256);
     const bgTexture = new THREE.CanvasTexture(canvas2d);
+    const initHour = getColomboHour();
+    const initDayFactor = getDayNightFactor(initHour);
+    updateSkyBackground(canvas2d, bgTexture, initDayFactor);
     scene.background = bgTexture;
 
-    // Fog for depth
-    scene.fog = new THREE.FogExp2(0x0d1117, 0.025);
+    // Fog for depth — color adapts to day/night
+    const nightFogColor = new THREE.Color(0x0d1117);
+    const dayFogColor = new THREE.Color(0x87ceeb);
+    const initFogColor = nightFogColor.clone().lerp(dayFogColor, initDayFactor);
+    scene.fog = new THREE.FogExp2(initFogColor.getHex(), 0.025);
 
     // ─── Camera ──────────────────────────────────────────────
     const aspect = container.clientWidth / container.clientHeight;
@@ -458,29 +521,44 @@ export function PixelOffice() {
     controls.saveState();
     controlsRef.current = controls;
 
-    // ─── Lighting ────────────────────────────────────────────
-    // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x334466, 0.6);
+    // ─── Lighting (dynamic day/night) ───────────────────────
+    // Color references for lerping
+    const nightAmbientColor = new THREE.Color(0x334466);
+    const dayAmbientColor = new THREE.Color(0xffffff);
+    const moonColor = new THREE.Color(0x8888cc);
+    const sunColor = new THREE.Color(0xffffcc);
+
+    // Ambient light — intensity and color interpolated per frame
+    const ambientLight = new THREE.AmbientLight(
+      nightAmbientColor.clone().lerp(dayAmbientColor, initDayFactor),
+      THREE.MathUtils.lerp(0.3, 0.8, initDayFactor)
+    );
     scene.add(ambientLight);
 
-    // Moonlight (directional)
-    const moonLight = new THREE.DirectionalLight(0x8888cc, 0.8);
-    moonLight.position.set(10, 15, 5);
-    moonLight.castShadow = true;
-    moonLight.shadow.mapSize.width = 2048;
-    moonLight.shadow.mapSize.height = 2048;
-    moonLight.shadow.camera.near = 0.5;
-    moonLight.shadow.camera.far = 50;
-    moonLight.shadow.camera.left = -20;
-    moonLight.shadow.camera.right = 20;
-    moonLight.shadow.camera.top = 20;
-    moonLight.shadow.camera.bottom = -20;
-    scene.add(moonLight);
+    // Main directional light (sun by day, moon by night)
+    const mainLight = new THREE.DirectionalLight(
+      moonColor.clone().lerp(sunColor, initDayFactor),
+      THREE.MathUtils.lerp(0.5, 1.2, initDayFactor)
+    );
+    mainLight.position.set(10, 15, 5);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 50;
+    mainLight.shadow.camera.left = -20;
+    mainLight.shadow.camera.right = 20;
+    mainLight.shadow.camera.top = 20;
+    mainLight.shadow.camera.bottom = -20;
+    scene.add(mainLight);
 
     // Warm fill light from the building
     const fillLight = new THREE.PointLight(0xffaa44, 0.5, 20);
     fillLight.position.set(0, 3, -5);
     scene.add(fillLight);
+
+    // Tone mapping exposure adapts to day/night
+    renderer.toneMappingExposure = THREE.MathUtils.lerp(0.8, 1.2, initDayFactor);
 
     // ─── Ground ──────────────────────────────────────────────
     createGround(scene);
@@ -498,17 +576,23 @@ export function PixelOffice() {
       createTree(scene, tx, tz);
     }
 
-    // ─── Stars (tiny cubes in the sky) ───────────────────────
+    // ─── Stars (tiny cubes in the sky — fade with day/night) ─
     const starGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
-    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const stars: THREE.Mesh[] = [];
     for (let i = 0; i < 80; i++) {
-      const star = new THREE.Mesh(starGeo, starMat);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1 - initDayFactor,
+      });
+      const star = new THREE.Mesh(starGeo, mat);
       star.position.set(
         (Math.random() - 0.5) * 60,
         15 + Math.random() * 15,
         (Math.random() - 0.5) * 60
       );
       scene.add(star);
+      stars.push(star);
     }
 
     // ─── Agents ──────────────────────────────────────────────
@@ -539,6 +623,37 @@ export function PixelOffice() {
       for (const parts of agentParts) {
         animateAgent(parts, elapsed);
       }
+
+      // ─── Day/Night cycle (Colombo time) ──────────────────
+      const hour = getColomboHour();
+      const dayFactor = getDayNightFactor(hour);
+
+      // Update ambient light
+      ambientLight.intensity = THREE.MathUtils.lerp(0.3, 0.8, dayFactor);
+      ambientLight.color.copy(
+        nightAmbientColor.clone().lerp(dayAmbientColor, dayFactor)
+      );
+
+      // Update main directional light (sun/moon)
+      mainLight.intensity = THREE.MathUtils.lerp(0.5, 1.2, dayFactor);
+      mainLight.color.copy(
+        moonColor.clone().lerp(sunColor, dayFactor)
+      );
+
+      // Update sky background
+      updateSkyBackground(canvas2d, bgTexture, dayFactor);
+
+      // Stars fade out during the day
+      for (const star of stars) {
+        (star.material as THREE.MeshBasicMaterial).opacity = 1 - dayFactor;
+      }
+
+      // Update fog color
+      const fogColor = nightFogColor.clone().lerp(dayFogColor, dayFactor);
+      scene.fog = new THREE.FogExp2(fogColor.getHex(), 0.025);
+
+      // Tone mapping adapts
+      renderer.toneMappingExposure = THREE.MathUtils.lerp(0.8, 1.2, dayFactor);
 
       controls.update();
       renderer.render(scene, camera);
