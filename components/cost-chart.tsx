@@ -13,6 +13,12 @@ import {
 
 const agentColors: Record<string, string> = {
   George: "#6366f1",
+  Rex: "#f59e0b",
+  Leo: "#ec4899",
+  Iris: "#8b5cf6",
+  Atlas: "#06b6d4",
+  Scout: "#f97316",
+  Hugo: "#14b8a6",
   "SEO Agent": "#10b981",
 };
 
