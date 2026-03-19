@@ -1,275 +1,367 @@
-"use client";
+import React from 'react';
 
-import { useEffect, useState } from "react";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Factory Floor — Real pixel agent heads per pipeline zone
-   Each zone shows the actual agent heads of active agents working tasks
-   Live data from /api/factory, refreshed every 5 seconds
-   ═══════════════════════════════════════════════════════════════════════ */
-
-interface FactoryTask {
+export type PipelineTask = {
+  id: string;
+  title: string;
+  status: string;
   agent_id: string;
-  [key: string]: unknown;
-}
-
-interface FactoryStages {
-  backlog: FactoryTask[];
-  spec: FactoryTask[];
-  inProgress: FactoryTask[];
-  qa: FactoryTask[];
-  review: FactoryTask[];
-  shipped: FactoryTask[];
-  archive: FactoryTask[];
-}
-
-interface FactoryData {
-  stages: FactoryStages;
-  stats: {
-    shippedToday: number;
-    inProgress: number;
-    backlog: number;
-    blocked: number;
-    total: number;
-  };
-}
-
-/* ─── Agent ID → Color Mapping ────────────────────────────────────── */
-
-const AGENT_COLORS: Record<string, string> = {
-  george: "#3b82f6",
-  main: "#3b82f6",
-  rex: "#f97316",
-  coder: "#f97316",
-  builder: "#6b7280",
-  tester: "#eab308",
-  reviewer: "#a855f7",
-  leo: "#22c55e",
-  content: "#22c55e",
-  iris: "#ec4899",
-  analyst: "#ec4899",
-  atlas: "#8b5cf6",
-  librarian: "#8b5cf6",
+  notes?: string;
 };
 
-const DEFAULT_AGENT_COLOR = "#6b7280";
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
-function getAgentColor(agentId: string): string {
-  const id = agentId.toLowerCase().trim();
-  if (AGENT_COLORS[id]) return AGENT_COLORS[id];
-  // Check if the agent_id contains a known key (e.g. "george/main" → match "george")
-  for (const [key, color] of Object.entries(AGENT_COLORS)) {
-    if (id.includes(key)) return color;
-  }
-  return DEFAULT_AGENT_COLOR;
+const ACTIVE_STATUSES = ['BACKLOG', 'SPEC', 'IN_PROGRESS', 'QA', 'REVIEW'] as const;
+type ActiveStatus = (typeof ACTIVE_STATUSES)[number];
+
+const STATUS_LABELS: Record<ActiveStatus, string> = {
+  BACKLOG: 'Backlog',
+  SPEC: 'Spec',
+  IN_PROGRESS: 'In Progress',
+  QA: 'QA',
+  REVIEW: 'Review',
+};
+
+/** Agent-id -> hex colour for the pixel head background. */
+const AGENT_COLORS: Record<string, string> = {
+  'george/main': '#3b82f6',
+  'rex/coder': '#f97316',
+  builder: '#6b7280',
+  'leo/content': '#22c55e',
+  'iris/analyst': '#ec4899',
+  'atlas/librarian': '#8b5cf6',
+  'hugo/leads': '#ef4444',
+  'scout/trend': '#06b6d4',
+  tester: '#eab308',
+  reviewer: '#6366f1',
+};
+
+const DEFAULT_AGENT_COLOR = '#9ca3af';
+
+// ---------------------------------------------------------------------------
+// Keyframe injection (runs once)
+// ---------------------------------------------------------------------------
+
+const BOB_KEYFRAMES = `
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+`;
+
+let keyframesInjected = false;
+
+function ensureKeyframes(): void {
+  if (typeof document === 'undefined' || keyframesInjected) return;
+  const style = document.createElement('style');
+  style.textContent = BOB_KEYFRAMES;
+  document.head.appendChild(style);
+  keyframesInjected = true;
 }
 
-/* ─── Zone Definitions ────────────────────────────────────────────── */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-const ZONES = [
-  { key: "spec" as const, label: "SPEC", stageKey: "spec" as keyof FactoryStages, color: "#22c55e", bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.25)" },
-  { key: "build" as const, label: "BUILD", stageKey: "inProgress" as keyof FactoryStages, color: "#3b82f6", bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.25)" },
-  { key: "qa" as const, label: "QA", stageKey: "qa" as keyof FactoryStages, color: "#eab308", bg: "rgba(234,179,8,0.08)", border: "rgba(234,179,8,0.25)" },
-  { key: "review" as const, label: "REVIEW", stageKey: "review" as keyof FactoryStages, color: "#a855f7", bg: "rgba(168,85,247,0.08)", border: "rgba(168,85,247,0.25)" },
-  { key: "ship" as const, label: "SHIP", stageKey: "shipped" as keyof FactoryStages, color: "#f59e0b", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)" },
-  { key: "archive" as const, label: "ARCHIVE", stageKey: "archive" as keyof FactoryStages, color: "#6b7280", bg: "rgba(107,114,128,0.08)", border: "rgba(107,114,128,0.25)" },
-] as const;
+function resolveColor(agentId: string): string {
+  const normalized = agentId.trim().toLowerCase();
+  return AGENT_COLORS[normalized] ?? DEFAULT_AGENT_COLOR;
+}
 
-/* ─── Agent Head Component ────────────────────────────────────────── */
+function extractDisplayName(agentId: string): string {
+  const parts = agentId.split('/');
+  return parts[0] ?? agentId;
+}
 
-function AgentHead({ agentId, index }: { agentId: string; index: number }) {
-  const color = getAgentColor(agentId);
-  const delay = index * 0.15;
+function isActiveStatus(status: string): status is ActiveStatus {
+  return (ACTIVE_STATUSES as readonly string[]).includes(status);
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+interface PixelHeadProps {
+  agentId: string;
+  /** Stagger offset so heads in the same column bob out of phase. */
+  delayMs?: number;
+}
+
+const PixelHead: React.FC<PixelHeadProps> = ({ agentId, delayMs = 0 }) => {
+  const color = resolveColor(agentId);
+  const name = extractDisplayName(agentId);
+
+  const headStyle: React.CSSProperties = {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: color,
+    position: 'relative',
+    animation: `bob 1.6s ease-in-out ${delayMs}ms infinite`,
+    flexShrink: 0,
+  };
+
+  const eyeBase: React.CSSProperties = {
+    width: 4,
+    height: 4,
+    backgroundColor: '#000',
+    borderRadius: 1,
+    position: 'absolute',
+    top: 12,
+  };
+
+  const nametagStyle: React.CSSProperties = {
+    fontSize: 8,
+    lineHeight: '12px',
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 2,
+    fontFamily: 'monospace',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: 48,
+  };
 
   return (
     <div
-      className="agent-head-wrapper"
-      style={{ animationDelay: `${delay}s` }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}
     >
-      {/* Nametag above the head */}
-      <div className="agent-nametag">{agentId}</div>
-      {/* 40x40 pixel head */}
-      <div className="agent-head" style={{ background: color }}>
-        {/* Left eye — 4px black square */}
-        <div className="agent-eye agent-eye-l" />
-        {/* Right eye — 4px black square */}
-        <div className="agent-eye agent-eye-r" />
+      <div style={headStyle} title={agentId}>
+        {/* Left eye */}
+        <div style={{ ...eyeBase, left: 8 }} />
+        {/* Right eye */}
+        <div style={{ ...eyeBase, right: 8 }} />
       </div>
+      <span style={nametagStyle}>{name}</span>
     </div>
   );
-}
+};
 
-/* ─── Ghost Head (empty zone placeholder) ─────────────────────────── */
+// ---------------------------------------------------------------------------
+// Ghost placeholder for empty zones
+// ---------------------------------------------------------------------------
 
-function GhostHead() {
+const GhostPlaceholder: React.FC = () => {
+  const ghostHeadStyle: React.CSSProperties = {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: '#374151',
+    opacity: 0.35,
+    position: 'relative',
+  };
+
+  const ghostEyeBase: React.CSSProperties = {
+    width: 4,
+    height: 4,
+    backgroundColor: '#000',
+    borderRadius: 1,
+    position: 'absolute',
+    top: 12,
+    opacity: 0.3,
+  };
+
+  const ghostLabelStyle: React.CSSProperties = {
+    fontSize: 8,
+    lineHeight: '12px',
+    color: '#4b5563',
+    textAlign: 'center',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  };
+
   return (
-    <div className="agent-head-wrapper ghost-head">
-      <div className="agent-nametag" style={{ opacity: 0.3 }}>---</div>
-      <div className="agent-head" style={{ background: "#6b7280", opacity: 0.3 }}>
-        <div className="agent-eye agent-eye-l" />
-        <div className="agent-eye agent-eye-r" />
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}
+    >
+      <div style={ghostHeadStyle}>
+        <div style={{ ...ghostEyeBase, left: 8 }} />
+        <div style={{ ...ghostEyeBase, right: 8 }} />
       </div>
+      <span style={ghostLabelStyle}>---</span>
     </div>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Task card wrapper
+// ---------------------------------------------------------------------------
+
+interface TaskCardProps {
+  task: PipelineTask;
+  index: number;
 }
 
-/* ─── Main Component ─────────────────────────────────────────────── */
+const TaskCard: React.FC<TaskCardProps> = ({ task, index }) => {
+  const cardStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    padding: 8,
+    backgroundColor: '#1e293b',
+    borderRadius: 6,
+    border: '1px solid #334155',
+    width: 64,
+  };
 
-export function FactoryFloor() {
-  const [data, setData] = useState<FactoryData | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch("/api/factory");
-        if (res.ok) setData(await res.json());
-      } catch {
-        /* silently retry on next interval */
-      }
-    };
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const titleStyle: React.CSSProperties = {
+    fontSize: 9,
+    lineHeight: '12px',
+    color: '#cbd5e1',
+    textAlign: 'center',
+    fontFamily: 'monospace',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    width: '100%',
+  };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-tight">Factory Floor</h2>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[10px] text-muted-foreground font-mono">LIVE</span>
-        </div>
-      </div>
+    <div style={cardStyle} title={task.notes ?? task.title}>
+      <PixelHead agentId={task.agent_id} delayMs={index * 200} />
+      <span style={titleStyle}>{task.title}</span>
+    </div>
+  );
+};
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {ZONES.map((zone) => {
-          const tasks = (data?.stages[zone.stageKey] ?? []) as FactoryTask[];
-          const count = tasks.length;
-          return (
-            <div
-              key={zone.key}
-              className="relative rounded-lg border overflow-hidden transition-all"
-              style={{
-                borderColor: zone.border,
-                background: zone.bg,
-                minHeight: 160,
-              }}
-            >
-              {/* Zone header */}
-              <div
-                className="flex items-center justify-between px-3 py-1.5"
-                style={{ borderBottom: `1px solid ${zone.border}` }}
-              >
-                <span
-                  className="text-[10px] font-bold tracking-widest font-mono"
-                  style={{ color: zone.color }}
-                >
-                  {zone.label}
-                </span>
-                <span
-                  className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
-                  style={{ background: zone.border, color: zone.color }}
-                >
-                  {count}
-                </span>
-              </div>
+// ---------------------------------------------------------------------------
+// Status column / zone
+// ---------------------------------------------------------------------------
 
-              {/* Agent heads area */}
-              <div className="flex flex-wrap items-end justify-center gap-2 p-2 min-h-[110px]">
-                {count === 0 ? (
-                  <GhostHead />
-                ) : (
-                  tasks.map((task, i) => (
-                    <AgentHead
-                      key={`${task.agent_id}-${i}`}
-                      agentId={task.agent_id}
-                      index={i}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+interface StatusZoneProps {
+  status: ActiveStatus;
+  tasks: PipelineTask[];
+}
 
-      {/* Stats row */}
-      {data?.stats && (
-        <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground px-1">
-          <span>Total: <strong className="text-foreground">{data.stats.total}</strong></span>
-          <span>Active: <strong className="text-blue-400">{data.stats.inProgress}</strong></span>
-          <span>Shipped: <strong className="text-emerald-400">{data.stats.shippedToday}</strong></span>
-          <span>Blocked: <strong className="text-red-400">{data.stats.blocked}</strong></span>
-        </div>
+const StatusZone: React.FC<StatusZoneProps> = ({ status, tasks }) => {
+  const zoneStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 88,
+    flex: '1 1 0%',
+  };
+
+  const headerStyle: React.CSSProperties = {
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    color: '#64748b',
+    fontFamily: 'monospace',
+    marginBottom: 4,
+  };
+
+  const countBadgeStyle: React.CSSProperties = {
+    fontSize: 9,
+    color: '#475569',
+    fontFamily: 'monospace',
+  };
+
+  return (
+    <div style={zoneStyle}>
+      <span style={headerStyle}>{STATUS_LABELS[status]}</span>
+      <span style={countBadgeStyle}>{tasks.length}</span>
+      {tasks.length === 0 ? (
+        <GhostPlaceholder />
+      ) : (
+        tasks.map((task, idx) => (
+          <TaskCard key={task.id} task={task} index={idx} />
+        ))
       )}
-
-      {/* CSS Keyframes for all animations */}
-      <style jsx>{`
-        /* ── Agent Head Wrapper (bobbing animation) ──────── */
-        .agent-head-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          image-rendering: pixelated;
-          animation: agentBob 1.2s ease-in-out infinite;
-        }
-
-        @keyframes agentBob {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-6px);
-          }
-        }
-
-        /* ── Ghost head — no bobbing ─────────────────────── */
-        .ghost-head {
-          animation: none;
-        }
-
-        /* ── Nametag above the head ──────────────────────── */
-        .agent-nametag {
-          font-family: monospace;
-          font-size: 8px;
-          font-weight: 700;
-          color: #d1d5db;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          line-height: 1;
-          margin-bottom: 3px;
-          white-space: nowrap;
-          max-width: 56px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          text-align: center;
-        }
-
-        /* ── 40x40 Pixel Head ────────────────────────────── */
-        .agent-head {
-          width: 40px;
-          height: 40px;
-          position: relative;
-          image-rendering: pixelated;
-          border-radius: 2px;
-        }
-
-        /* ── Eyes — 4px black squares ────────────────────── */
-        .agent-eye {
-          position: absolute;
-          width: 4px;
-          height: 4px;
-          background: #000;
-          top: 16px;
-        }
-        .agent-eye-l {
-          left: 10px;
-        }
-        .agent-eye-r {
-          right: 10px;
-        }
-      `}</style>
     </div>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface FactoryFloorProps {
+  tasks?: PipelineTask[];
 }
+
+const FactoryFloor: React.FC<FactoryFloorProps> = ({ tasks: tasksProp }) => {
+  const [fetchedTasks, setFetchedTasks] = React.useState<PipelineTask[]>([]);
+
+  React.useEffect(() => {
+    ensureKeyframes();
+    if (!tasksProp) {
+      const load = () =>
+        fetch('/api/factory')
+          .then((r) => r.json())
+          .then((d) => setFetchedTasks(d.tasks ?? []))
+          .catch(() => {});
+      load();
+      const id = setInterval(load, 5000);
+      return () => clearInterval(id);
+    }
+  }, [tasksProp]);
+
+  const tasks = tasksProp ?? fetchedTasks;
+
+  // Filter to active statuses only — SHIPPED and ARCHIVE are excluded.
+  const activeTasks = React.useMemo(
+    () => tasks.filter((t) => isActiveStatus(t.status)),
+    [tasks],
+  );
+
+  // Group tasks by status, preserving column order.
+  const grouped = React.useMemo(() => {
+    const map = new Map<ActiveStatus, PipelineTask[]>();
+    for (const status of ACTIVE_STATUSES) {
+      map.set(status, []);
+    }
+    for (const task of activeTasks) {
+      const bucket = map.get(task.status as ActiveStatus);
+      if (bucket) {
+        bucket.push(task);
+      }
+    }
+    return map;
+  }, [activeTasks]);
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 16,
+    padding: 16,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    overflowX: 'auto',
+    minHeight: 160,
+    alignItems: 'flex-start',
+  };
+
+  return (
+    <div style={containerStyle}>
+      {ACTIVE_STATUSES.map((status) => (
+        <StatusZone
+          key={status}
+          status={status}
+          tasks={grouped.get(status) ?? []}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default FactoryFloor;
+
+export { FactoryFloor };
