@@ -1376,7 +1376,7 @@ export function PixelOffice() {
       alpha: false,
     });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(1); // Forcer 1 pour perf optimale
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1498,7 +1498,8 @@ export function PixelOffice() {
 
     // ─── Mines at 4 edges ─────────────────────────────────────
     const minePositions: [number, number][] = [
-      [-25, 0], [25, 0], [0, -25], [0, 25],
+      [18, -18], [-18, -18], // Mines visibles en avant (face caméra)
+      [18, 18], [-18, 18],   // Mines en arrière
     ];
     const allDiamonds: THREE.Mesh[] = [];
     for (const [mx, mz] of minePositions) {
@@ -1508,10 +1509,10 @@ export function PixelOffice() {
 
     // ─── Miner NPCs (6-8 near mines) ─────────────────────────
     const minerPositions: [number, number, number][] = [
-      [-23, 0, 1], [-23, 0, -1],
-      [23, 0, 1], [23, 0, -1],
-      [1, 0, -23], [-1, 0, -23],
-      [1, 0, 23], [-1, 0, 23],
+      [16, 0, -16], [19, 0, -19], // Mine avant droite
+      [-16, 0, -16], [-19, 0, -19], // Mine avant gauche
+      [16, 0, 16], [19, 0, 19], // Mine arrière droite
+      [-16, 0, 16], [-19, 0, 19], // Mine arrière gauche
     ];
     const miners: MinerData[] = [];
     for (const pos of minerPositions) {
@@ -1519,7 +1520,7 @@ export function PixelOffice() {
     }
 
     // ─── Waterfall on one edge ───────────────────────────────
-    const waterfallData = createWaterfall(scene, -25, 15);
+    const waterfallData = createWaterfall(scene, 22, -8); // Cascade visible côté droit face caméra
 
     // ─── Animals ─────────────────────────────────────────────
     const animals: AnimalData[] = [];
@@ -1539,8 +1540,46 @@ export function PixelOffice() {
     animals.push(createChicken(scene, -8, 12));
     animals.push(createChicken(scene, 3, 16));
 
-    // ─── Birds (8 flying in elliptical pattern) ──────────────
-    const birds = createBirds(scene);
+    // ─── Birds (2 max) ───────────────────────────────────────
+    const birds = createBirds(scene).slice(0, 2); // Max 2 oiseaux
+
+    // ─── Gemmes au sol (diamants + rubis scintillants) ────────
+    const gemPositions = [
+      [6, -8], [-7, 5], [10, 3], [-5, -10], [3, 12],
+      [-9, 8], [8, -5], [-3, 9], [11, -11], [-11, 6],
+    ];
+    const gemColors = [0x00bfff, 0xff1493, 0x7cfc00, 0xff6600, 0xffd700];
+    const gems: THREE.Mesh[] = [];
+    for (let i = 0; i < gemPositions.length; i++) {
+      const [gx, gz] = gemPositions[i]!;
+      const geo = new THREE.OctahedronGeometry(0.2);
+      const mat = new THREE.MeshStandardMaterial({
+        color: gemColors[i % gemColors.length],
+        emissive: gemColors[i % gemColors.length],
+        emissiveIntensity: 0.5,
+        metalness: 0.8,
+        roughness: 0.1,
+      });
+      const gem = new THREE.Mesh(geo, mat);
+      gem.position.set(gx, 0.3, gz!);
+      scene.add(gem);
+      gems.push(gem);
+    }
+
+    // ─── Lianes (cylindres verts qui pendent des arbres) ─────
+    const lianePositions = [[-14, -12], [16, 10], [-8, 16], [12, -15], [-16, 8]];
+    for (const [lx, lz] of lianePositions) {
+      const geo = new THREE.CylinderGeometry(0.05, 0.05, 3);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x2d6a1f });
+      const liane = new THREE.Mesh(geo, mat);
+      liane.position.set(lx, 2.5, lz);
+      scene.add(liane);
+      // Feuille en bas
+      const leafGeo = new THREE.SphereGeometry(0.3, 4, 4);
+      const leaf = new THREE.Mesh(leafGeo, mat);
+      leaf.position.set(lx, 0.8, lz);
+      scene.add(leaf);
+    }
 
     // ─── Clouds (5 clusters) ─────────────────────────────────
     const clouds = createClouds(scene);
@@ -1596,6 +1635,14 @@ export function PixelOffice() {
       // Animate agents
       for (const parts of agentParts) {
         animateAgent(parts, elapsed);
+      }
+
+      // ─── Animate gemmes au sol ──────────────────────────────
+      for (const gem of gems) {
+        gem.rotation.y = elapsed * 1.5;
+        gem.position.y = 0.3 + Math.sin(elapsed * 2 + gem.position.x) * 0.1;
+        const mat = gem.material as THREE.MeshStandardMaterial;
+        mat.emissiveIntensity = 0.4 + 0.4 * Math.sin(elapsed * 3 + gem.position.z);
       }
 
       // ─── Animate diamonds (rotation + opacity oscillation) ─
