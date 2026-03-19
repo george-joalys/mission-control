@@ -12,6 +12,7 @@ import {
   Building2,
   Factory,
   Sparkles,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/office", label: "Office", icon: Building2, fun: true },
   { href: "/factory", label: "🏭 Factory", icon: Factory },
+  { href: "/veille", label: "👁️ Veille", icon: Eye },
 ];
 
 export function Sidebar() {
