@@ -171,17 +171,29 @@ function createBuilding(scene: THREE.Scene): void {
     scene.add(pR);
   }
 
-  // Torches (glowing cubes)
+}
+
+// ─── Torches & Fireplace ─────────────────────────────────────────────
+interface TorchData {
+  flames: THREE.Mesh[];
+  lights: THREE.PointLight[];
+  fireplaceFlame: THREE.Mesh;
+  fireplaceLight: THREE.PointLight;
+}
+
+function createTorchesAndFireplace(scene: THREE.Scene): TorchData {
   const torchGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
   const torchMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
   const flameMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
   const flameGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
 
+  const flames: THREE.Mesh[] = [];
+  const lights: THREE.PointLight[] = [];
+
+  // Existing 4 wall torches
   const torchPositions = [
-    [-5.5, 3, -4],
-    [5.5, 3, -4],
-    [-5.5, 3, -6],
-    [5.5, 3, -6],
+    [-5.5, 3, -4], [5.5, 3, -4],
+    [-5.5, 3, -6], [5.5, 3, -6],
   ];
 
   for (const [tx, ty, tz] of torchPositions) {
@@ -189,14 +201,75 @@ function createBuilding(scene: THREE.Scene): void {
     torch.position.set(tx, ty, tz);
     scene.add(torch);
 
-    const flame = new THREE.Mesh(flameGeo, flameMat);
+    const flame = new THREE.Mesh(flameGeo, flameMat.clone());
     flame.position.set(tx, ty + 0.4, tz);
     scene.add(flame);
+    flames.push(flame);
 
-    const torchLight = new THREE.PointLight(0xff6600, 0.6, 6);
+    const torchLight = new THREE.PointLight(0xff6600, 0.8, 8);
     torchLight.position.set(tx, ty + 0.5, tz);
     scene.add(torchLight);
+    lights.push(torchLight);
   }
+
+  // ═══ CENTRAL FIREPLACE ═══
+  // Stone base (ring of stone blocks)
+  const stoneGeo = new THREE.BoxGeometry(0.5, 0.3, 0.5);
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0x606060 });
+  const fireplaceStones = [
+    [-0.5, 0, 1.5], [0.5, 0, 1.5], [0, 0, 1], [0, 0, 2],
+    [-0.5, 0, 1], [0.5, 0, 1], [-0.5, 0, 2], [0.5, 0, 2],
+  ];
+  for (const [sx, sy, sz] of fireplaceStones) {
+    const stone = new THREE.Mesh(stoneGeo, stoneMat);
+    stone.position.set(sx, sy + 0.15, sz);
+    stone.castShadow = true;
+    scene.add(stone);
+  }
+
+  // Log blocks inside
+  const logGeo = new THREE.BoxGeometry(0.3, 0.2, 0.8);
+  const logMat = new THREE.MeshLambertMaterial({ color: 0x5c3317 });
+  const log1 = new THREE.Mesh(logGeo, logMat);
+  log1.position.set(-0.1, 0.35, 1.5);
+  log1.rotation.y = 0.3;
+  scene.add(log1);
+  const log2 = new THREE.Mesh(logGeo, logMat);
+  log2.position.set(0.1, 0.35, 1.5);
+  log2.rotation.y = -0.3;
+  scene.add(log2);
+
+  // Fire flame blocks (multiple small cubes for the fire)
+  const fireFlameMat = new THREE.MeshBasicMaterial({
+    color: 0xff4400,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const fireFlameGeo = new THREE.BoxGeometry(0.4, 0.5, 0.4);
+  const fireplaceFlame = new THREE.Mesh(fireFlameGeo, fireFlameMat);
+  fireplaceFlame.position.set(0, 0.6, 1.5);
+  scene.add(fireplaceFlame);
+
+  // Extra flame particles
+  const smallFlameGeo = new THREE.BoxGeometry(0.2, 0.3, 0.2);
+  const smallFlameMat1 = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.7 });
+  const sf1 = new THREE.Mesh(smallFlameGeo, smallFlameMat1);
+  sf1.position.set(-0.15, 0.8, 1.4);
+  scene.add(sf1);
+  flames.push(sf1);
+  const smallFlameMat2 = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.7 });
+  const sf2 = new THREE.Mesh(smallFlameGeo, smallFlameMat2);
+  sf2.position.set(0.15, 0.8, 1.6);
+  scene.add(sf2);
+  flames.push(sf2);
+
+  // Fireplace PointLight (big warm light)
+  const fireplaceLight = new THREE.PointLight(0xff6622, 1.5, 12);
+  fireplaceLight.position.set(0, 1.2, 1.5);
+  fireplaceLight.castShadow = true;
+  scene.add(fireplaceLight);
+
+  return { flames, lights, fireplaceFlame, fireplaceLight };
 }
 
 // ─── Create trees ────────────────────────────────────────────────────
@@ -488,6 +561,9 @@ export function PixelOffice() {
     // ─── Building ────────────────────────────────────────────
     createBuilding(scene);
 
+    // ─── Torches & Fireplace ──────────────────────────────────
+    const torchData = createTorchesAndFireplace(scene);
+
     // ─── Trees ───────────────────────────────────────────────
     const treePositions = [
       [-9, -8], [9, -8], [-8, 5], [8, 5],
@@ -540,6 +616,26 @@ export function PixelOffice() {
         animateAgent(parts, elapsed);
       }
 
+      // Torch flickering
+      for (let i = 0; i < torchData.flames.length; i++) {
+        const flame = torchData.flames[i];
+        const flicker = 0.9 + Math.random() * 0.2;
+        flame.scale.y = flicker;
+        flame.scale.x = 0.85 + Math.random() * 0.3;
+      }
+      for (const light of torchData.lights) {
+        light.intensity = 0.6 + Math.random() * 0.4;
+      }
+
+      // Fireplace flickering
+      torchData.fireplaceFlame.scale.y = 0.8 + Math.random() * 0.4;
+      torchData.fireplaceFlame.scale.x = 0.9 + Math.random() * 0.2;
+      torchData.fireplaceLight.intensity = 1.2 + Math.random() * 0.6;
+      const fireColorShift = Math.random();
+      torchData.fireplaceLight.color.setHex(
+        fireColorShift > 0.5 ? 0xff6622 : 0xff4411
+      );
+
       controls.update();
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
@@ -566,6 +662,12 @@ export function PixelOffice() {
       cancelAnimationFrame(frameId);
 
       controls.dispose();
+
+      // Dispose torch and fireplace lights
+      for (const light of torchData.lights) {
+        light.dispose();
+      }
+      torchData.fireplaceLight.dispose();
 
       // Dispose all geometries and materials in the scene
       scene.traverse((obj) => {
