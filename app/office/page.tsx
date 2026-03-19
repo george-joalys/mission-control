@@ -1,16 +1,6 @@
-import dynamic from "next/dynamic";
+import { OfficeClient } from "@/components/office-client";
 
 export const revalidate = 0;
-
-const PixelOffice = dynamic(
-  () => import("@/components/pixel-office").then((m) => m.PixelOffice),
-  { ssr: false, loading: () => <div className="h-96 flex items-center justify-center text-muted-foreground">Chargement de l&apos;office...</div> }
-);
-
-const FactoryFloor = dynamic(
-  () => import("@/components/factory-floor").then((m) => m.FactoryFloor),
-  { ssr: false }
-);
 
 export default function OfficePage() {
   return (
@@ -21,8 +11,7 @@ export default function OfficePage() {
           Gem HQ — 3D Minecraft-style command center. 7 agents, idle animations, full orbit controls.
         </p>
       </div>
-      <PixelOffice />
-      <FactoryFloor />
+      <OfficeClient />
     </div>
   );
 }
