@@ -65,12 +65,33 @@ function createGrassBlock(size = 1): THREE.Mesh {
 
 // ─── Create the ground plane with Minecraft blocks ───────────────────
 function createGround(scene: THREE.Scene): void {
-  const gridSize = 12;
+  const gridSize = 14; // Slightly larger for jungle feel
+  const pathMat = new THREE.MeshLambertMaterial({ color: 0x8b6914 }); // Dirt path
+  const dirtMat = new THREE.MeshLambertMaterial({ color: 0x6b4423 });
+
   for (let x = -gridSize; x <= gridSize; x++) {
     for (let z = -gridSize; z <= gridSize; z++) {
-      const block = createGrassBlock(1);
-      block.position.set(x, -0.5, z);
-      scene.add(block);
+      // Create dirt path from building to front (z = -4 to z = 6, x = -1 to 1)
+      const isPath = (Math.abs(x) <= 1 && z >= -4 && z <= 8) ||
+                     (Math.abs(z - 2) <= 1 && x >= -6 && x <= 6);
+
+      if (isPath) {
+        const materials = [
+          dirtMat, dirtMat,
+          pathMat, // top
+          dirtMat,
+          dirtMat, dirtMat,
+        ];
+        const geo = new THREE.BoxGeometry(1, 1, 1);
+        const block = new THREE.Mesh(geo, materials);
+        block.position.set(x, -0.5, z);
+        block.receiveShadow = true;
+        scene.add(block);
+      } else {
+        const block = createGrassBlock(1);
+        block.position.set(x, -0.5, z);
+        scene.add(block);
+      }
     }
   }
 }
@@ -230,6 +251,59 @@ function createTree(scene: THREE.Scene, x: number, z: number): void {
   topLeaf.position.set(x, 6.5, z);
   topLeaf.castShadow = true;
   scene.add(topLeaf);
+}
+
+// ─── Create a tall jungle tree ──────────────────────────────────────
+function createJungleTree(scene: THREE.Scene, x: number, z: number): void {
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2a0a });
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x1a6b1a });
+  const darkLeafMat = new THREE.MeshLambertMaterial({ color: 0x0d5c0d });
+  const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+
+  // Taller trunk (5-7 blocks)
+  const trunkHeight = 5 + Math.floor(Math.random() * 3);
+  for (let y = 0; y < trunkHeight; y++) {
+    const trunk = new THREE.Mesh(blockGeo, trunkMat);
+    trunk.position.set(x, y + 0.5, z);
+    trunk.castShadow = true;
+    scene.add(trunk);
+  }
+
+  // Wider canopy (3x3x2 with some random gaps)
+  for (let lx = -2; lx <= 2; lx++) {
+    for (let lz = -2; lz <= 2; lz++) {
+      for (let ly = 0; ly <= 2; ly++) {
+        if (lx === 0 && lz === 0 && ly === 0) continue;
+        // Random gaps for organic look
+        if (Math.abs(lx) === 2 && Math.abs(lz) === 2 && Math.random() > 0.4) continue;
+        const mat = Math.random() > 0.5 ? leafMat : darkLeafMat;
+        const leaf = new THREE.Mesh(blockGeo, mat);
+        leaf.position.set(x + lx, trunkHeight + 0.5 + ly, z + lz);
+        leaf.castShadow = true;
+        scene.add(leaf);
+      }
+    }
+  }
+  // Top leaves
+  const top1 = new THREE.Mesh(blockGeo, leafMat);
+  top1.position.set(x, trunkHeight + 3.5, z);
+  top1.castShadow = true;
+  scene.add(top1);
+}
+
+// ─── Create jungle bush ─────────────────────────────────────────────
+function createBush(scene: THREE.Scene, x: number, z: number): void {
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2d8b2d });
+  const blockGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+
+  for (let bx = -0.5; bx <= 0.5; bx += 1) {
+    for (let bz = -0.5; bz <= 0.5; bz += 1) {
+      const bush = new THREE.Mesh(blockGeo, leafMat);
+      bush.position.set(x + bx, 0.35, z + bz);
+      bush.castShadow = true;
+      scene.add(bush);
+    }
+  }
 }
 
 // ─── Create a Minecraft-style agent character ────────────────────────
@@ -417,7 +491,7 @@ export function PixelOffice() {
     scene.background = bgTexture;
 
     // Fog for depth
-    scene.fog = new THREE.FogExp2(0x0d1117, 0.025);
+    scene.fog = new THREE.FogExp2(0x1a3a1a, 0.035); // Green-tinted, denser fog
 
     // ─── Camera ──────────────────────────────────────────────
     const aspect = container.clientWidth / container.clientHeight;
@@ -488,14 +562,34 @@ export function PixelOffice() {
     // ─── Building ────────────────────────────────────────────
     createBuilding(scene);
 
-    // ─── Trees ───────────────────────────────────────────────
-    const treePositions = [
+    // ─── Jungle Trees ─────────────────────────────────────────
+    const normalTreePositions = [
       [-9, -8], [9, -8], [-8, 5], [8, 5],
       [-10, -2], [10, -2], [-7, 8], [7, 8],
-      [-11, 3], [11, -4],
+      [-11, 3], [11, -4], [-6, -10], [6, 10],
     ];
-    for (const [tx, tz] of treePositions) {
+    for (const [tx, tz] of normalTreePositions) {
       createTree(scene, tx, tz);
+    }
+
+    const jungleTreePositions = [
+      [-12, 6], [12, 7], [-11, -7], [11, 9],
+      [-13, 0], [13, 1], [-9, 10], [9, -10],
+      [-12, -10], [12, -8], [-10, 8], [10, 6],
+      [-7, -11], [8, 11],
+    ];
+    for (const [tx, tz] of jungleTreePositions) {
+      createJungleTree(scene, tx, tz);
+    }
+
+    // Bushes scattered around
+    const bushPositions = [
+      [-4, 4], [4, 4], [-6, 2], [6, 2],
+      [-3, 7], [3, 7], [-8, 0], [8, 0],
+      [-5, 9], [5, -7], [-2, 5], [2, 6],
+    ];
+    for (const [bx, bz] of bushPositions) {
+      createBush(scene, bx, bz);
     }
 
     // ─── Stars (tiny cubes in the sky) ───────────────────────
