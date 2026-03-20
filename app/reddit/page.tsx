@@ -12,33 +12,41 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Rocket,
 } from "lucide-react";
+
+interface AppIdea {
+  name: string;
+  potential_score: number;
+  build_score: number;
+  marketing_score: number;
+  why: string;
+}
+
+interface PromisingApp {
+  name: string;
+  angle: string;
+}
 
 interface RedditScrapeCache {
   id: string;
-  created_at: string;
-  scanned_at?: string;
+  scraped_at: string | null;
   posts_count?: number;
-  pain_points?: string[] | string;
-  app_ideas?: string[] | string;
-  promising_apps?: string[] | string;
-  subreddits?: string[];
-  raw_data?: Record<string, unknown>;
+  pain_points?: string[];
+  app_ideas?: AppIdea[];
+  promising_apps?: PromisingApp[];
+  raw_data?: unknown;
+  scan_type?: string;
 }
 
-function parseJsonField(val: string[] | string | undefined): string[] {
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  try {
-    const parsed = JSON.parse(val as string);
-    return Array.isArray(parsed) ? parsed : [String(parsed)];
-  } catch {
-    return [String(val)];
-  }
+function stars(score: number) {
+  return "★".repeat(score) + "☆".repeat(5 - score);
 }
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string | null | undefined) {
+  if (!dateStr) return "Date inconnue";
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "Date invalide";
   return d.toLocaleDateString("fr-FR", {
     day: "2-digit",
     month: "short",
@@ -50,10 +58,9 @@ function formatDate(dateStr: string) {
 
 function ScanCard({ scan }: { scan: RedditScrapeCache }) {
   const [expanded, setExpanded] = useState(false);
-  const painPoints = parseJsonField(scan.pain_points);
-  const appIdeas = parseJsonField(scan.app_ideas);
-  const promisingApps = parseJsonField(scan.promising_apps);
-  const dateStr = scan.scanned_at || scan.created_at;
+  const painPoints: string[] = Array.isArray(scan.pain_points) ? scan.pain_points : [];
+  const appIdeas: AppIdea[] = Array.isArray(scan.app_ideas) ? scan.app_ideas : [];
+  const promisingApps: PromisingApp[] = Array.isArray(scan.promising_apps) ? scan.promising_apps : [];
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -67,12 +74,10 @@ function ScanCard({ scan }: { scan: RedditScrapeCache }) {
             <TrendingUp className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">
-              Scan Reddit
-            </p>
+            <p className="text-sm font-medium text-foreground">Scan Reddit</p>
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
               <Calendar className="h-3 w-3" />
-              {formatDate(dateStr)}
+              {formatDate(scan.scraped_at)}
             </p>
           </div>
         </div>
@@ -83,14 +88,14 @@ function ScanCard({ scan }: { scan: RedditScrapeCache }) {
             </span>
           )}
           <div className="flex gap-1.5">
-            {painPoints.length > 0 && (
-              <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-400 border border-red-500/20">
-                {painPoints.length} pain points
-              </span>
-            )}
             {appIdeas.length > 0 && (
               <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-400 border border-blue-500/20">
                 {appIdeas.length} idées
+              </span>
+            )}
+            {painPoints.length > 0 && (
+              <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-400 border border-purple-500/20">
+                Analysé par Iris
               </span>
             )}
           </div>
@@ -104,13 +109,14 @@ function ScanCard({ scan }: { scan: RedditScrapeCache }) {
 
       {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-border px-5 py-4 space-y-5">
-          {painPoints.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="h-4 w-4 text-red-400" />
-                <h3 className="text-sm font-semibold text-foreground">Pain Points</h3>
-              </div>
+        <div className="border-t border-border px-5 py-4 space-y-6">
+          {/* Section 1 — Galères du marché */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="h-4 w-4 text-red-400" />
+              <h3 className="text-sm font-semibold text-foreground">💢 Galères du marché</h3>
+            </div>
+            {painPoints.length > 0 ? (
               <ul className="space-y-2">
                 {painPoints.map((point, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -119,57 +125,57 @@ function ScanCard({ scan }: { scan: RedditScrapeCache }) {
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Analyse en attente</p>
+            )}
+          </div>
 
-          {appIdeas.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Lightbulb className="h-4 w-4 text-yellow-400" />
-                <h3 className="text-sm font-semibold text-foreground">Idées d&apos;Apps</h3>
-              </div>
-              <ul className="space-y-2">
+          {/* Section 2 — Idées d'app */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-yellow-400" />
+              <h3 className="text-sm font-semibold text-foreground">💡 Idées d&apos;app</h3>
+            </div>
+            {appIdeas.length > 0 ? (
+              <ul className="space-y-4">
                 {appIdeas.map((idea, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-yellow-400" />
-                    {idea}
+                  <li key={i} className="rounded-lg bg-accent/20 border border-border px-4 py-3">
+                    <p className="text-sm font-semibold text-foreground mb-1">{idea.name}</p>
+                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mb-2">
+                      <span title="Potentiel">💰 {stars(idea.potential_score)}</span>
+                      <span title="Faisabilité">🔧 {stars(idea.build_score)}</span>
+                      <span title="Marketing">📢 {stars(idea.marketing_score)}</span>
+                    </div>
+                    {idea.why && (
+                      <p className="text-xs text-muted-foreground italic">→ {idea.why}</p>
+                    )}
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Analyse en attente</p>
+            )}
+          </div>
 
-          {promisingApps.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-green-400" />
-                <h3 className="text-sm font-semibold text-foreground">Apps Prometteuses</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
+          {/* Section 3 — Apps à surveiller */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Rocket className="h-4 w-4 text-green-400" />
+              <h3 className="text-sm font-semibold text-foreground">🚀 Apps à surveiller</h3>
+            </div>
+            {promisingApps.length > 0 ? (
+              <ul className="space-y-2">
                 {promisingApps.map((app, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400 border border-green-500/20"
-                  >
-                    {app}
-                  </span>
+                  <li key={i} className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{app.name}</span>
+                    {app.angle && <span> — {app.angle}</span>}
+                  </li>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {scan.subreddits && scan.subreddits.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">Subreddits scrapés :</p>
-              <div className="flex flex-wrap gap-1.5">
-                {scan.subreddits.map((sub, i) => (
-                  <span key={i} className="text-xs text-orange-400 bg-orange-500/5 border border-orange-500/15 rounded px-2 py-0.5">
-                    r/{sub}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Aucune app identifiée</p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -233,7 +239,7 @@ export default function RedditPage() {
           <div>
             <h1 className="text-xl font-bold">Reddit Scout</h1>
             <p className="text-sm text-muted-foreground">
-              Veille automatique des subreddits — pain points & idées SaaS
+              Veille automatique des subreddits — pain points &amp; idées SaaS
             </p>
           </div>
         </div>
@@ -278,7 +284,7 @@ export default function RedditPage() {
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground">Dernier scan</p>
             <p className="text-sm font-semibold text-foreground mt-1">
-              {formatDate(scans[0].scanned_at || scans[0].created_at)}
+              {formatDate(scans[0].scraped_at)}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4">
