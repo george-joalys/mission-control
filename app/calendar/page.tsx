@@ -24,6 +24,56 @@ import {
 import { createClient } from "@/lib/supabase";
 
 // ---------------------------------------------------------------------------
+// Scout status types
+// ---------------------------------------------------------------------------
+
+interface ScoutState {
+  lastDailyScan?: number;
+  lastWeeklyScan?: number;
+  targetHour?: number | null;
+}
+
+interface ScoutStatus {
+  reddit: ScoutState;
+  scout: ScoutState;
+}
+
+// ---------------------------------------------------------------------------
+// Scout helpers
+// ---------------------------------------------------------------------------
+
+function formatScoutDate(ts: number | undefined): string {
+  if (!ts || ts === 0) return "Jamais";
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getRedditNext(lastDailyScan: number | undefined): string {
+  if (!lastDailyScan || lastDailyScan === 0) return "Demain ~7h";
+  const twentyHoursAgo = Date.now() / 1000 - 20 * 3600;
+  if (lastDailyScan > twentyHoursAgo) return "Aujourd'hui passé";
+  return "Demain ~7h";
+}
+
+function getNextSunday(): string {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun, 1=Mon,..., 6=Sat
+  const daysUntilSunday = day === 0 ? 7 : 7 - day;
+  const nextSun = new Date(now);
+  nextSun.setDate(now.getDate() + daysUntilSunday);
+  return nextSun.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  }) + " ~20h";
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -170,6 +220,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [jitterSalt, setJitterSalt] = useState(0);
   const [showRandomizerPanel, setShowRandomizerPanel] = useState(true);
+  const [scoutStatus, setScoutStatus] = useState<ScoutStatus | null>(null);
 
   // ---- Fetch tasks ----
   useEffect(() => {
@@ -182,6 +233,14 @@ export default function CalendarPage() {
         if (data) setTasks(data);
         setLoading(false);
       });
+  }, []);
+
+  // ---- Fetch scout status ----
+  useEffect(() => {
+    fetch("/api/scout-status")
+      .then((r) => r.json())
+      .then((data) => setScoutStatus(data))
+      .catch(() => {});
   }, []);
 
   // ---- Week calculations ----
@@ -331,6 +390,91 @@ export default function CalendarPage() {
               </div>
             </DialogContent>
           </Dialog>
+        </div>
+      </div>
+
+      {/* ---- 🔄 Automatique Section ---- */}
+      <div>
+        <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+          🔄 Automatique
+          <span className="text-xs text-muted-foreground font-normal">
+            Tâches récurrentes gérées par George
+          </span>
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Card Reddit Scout */}
+          <Card className="border-red-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔴</span>
+                  <div>
+                    <p className="font-semibold text-sm">Reddit Scout</p>
+                    <p className="text-xs text-muted-foreground">
+                      Quotidien · 6h30-8h Paris
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0"
+                >
+                  Actif
+                </Badge>
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  <span className="text-zinc-400">Dernier run : </span>
+                  {scoutStatus
+                    ? formatScoutDate(scoutStatus.reddit?.lastDailyScan)
+                    : "…"}
+                </p>
+                <p>
+                  <span className="text-zinc-400">Prochain : </span>
+                  <span className="text-zinc-200">
+                    {scoutStatus
+                      ? getRedditNext(scoutStatus.reddit?.lastDailyScan)
+                      : "…"}
+                  </span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card Instagram Scout */}
+          <Card className="border-pink-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📸</span>
+                  <div>
+                    <p className="font-semibold text-sm">Instagram Scout</p>
+                    <p className="text-xs text-muted-foreground">
+                      Hebdo · Dimanche soir
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0"
+                >
+                  Actif
+                </Badge>
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  <span className="text-zinc-400">Dernier run : </span>
+                  {scoutStatus
+                    ? formatScoutDate(scoutStatus.scout?.lastWeeklyScan)
+                    : "…"}
+                </p>
+                <p>
+                  <span className="text-zinc-400">Prochain : </span>
+                  <span className="text-zinc-200">{getNextSunday()}</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
