@@ -12,7 +12,7 @@ export async function GET() {
   const { data } = await supabase
     .from("pipeline_tasks")
     .select("agent_id, title, status")
-    .in("status", ["IN_PROGRESS", "SPEC", "QA", "DISPATCHED"]);
+    .in("status", ["SPEC", "DISPATCHED", "ACK_RECEIVED", "IN_PROGRESS", "STALLED", "BLOCKED", "READY_FOR_QA", "QA_IN_PROGRESS", "REVIEW"]);
 
   // Return first active task per agent
   const activeAgents: Record<string, string> = {};
