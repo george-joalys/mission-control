@@ -196,7 +196,7 @@ export default function RedditPage() {
       const { data, error: err } = await supabase
         .from("reddit_scrape_cache")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("scraped_at", { ascending: false });
 
       if (err) throw err;
       setScans(data || []);
