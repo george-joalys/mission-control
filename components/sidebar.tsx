@@ -13,6 +13,7 @@ import {
   Factory,
   Sparkles,
   Eye,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/office", label: "Office", icon: Building2, fun: true },
   { href: "/factory", label: "🏭 Factory", icon: Factory },
   { href: "/veille", label: "👁️ Veille", icon: Eye },
+  { href: "/reddit", label: "🔴 Reddit", icon: TrendingUp },
 ];
 
 export function Sidebar() {

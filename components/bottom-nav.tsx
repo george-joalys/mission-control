@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bot, Factory, Eye, MessageSquare, DollarSign, MoreHorizontal, Calendar, Brain, ScrollText, Building2 } from "lucide-react";
+import { Bot, Factory, Eye, MessageSquare, DollarSign, MoreHorizontal, Calendar, Brain, ScrollText, Building2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
@@ -19,6 +19,7 @@ const moreItems = [
   { href: "/skills", label: "Skills", icon: Brain, emoji: "🧠" },
   { href: "/logs", label: "Logs", icon: ScrollText, emoji: "📜" },
   { href: "/office", label: "Office", icon: Building2, emoji: "🏢" },
+  { href: "/reddit", label: "Reddit", icon: TrendingUp, emoji: "🔴" },
 ];
 
 export function BottomNav() {
