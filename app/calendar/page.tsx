@@ -228,19 +228,19 @@ export default function CalendarPage() {
   return (
     <div className="space-y-6">
       {/* ---- Header ---- */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Weekly task schedule &mdash; anti-detection randomizer active
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Tooltip text="Anti-pattern detection: tasks run at varying times to avoid detection patterns">
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              className="gap-1.5 text-amber-400 border-amber-500/30 hover:bg-amber-500/10 min-h-[44px] sm:min-h-0"
               onClick={() => setShowRandomizerPanel((v) => !v)}
             >
               <Shield className="h-3.5 w-3.5" />
@@ -251,6 +251,7 @@ export default function CalendarPage() {
           <Button
             variant="outline"
             size="icon"
+            className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
             onClick={() => setWeekOffset((w) => w - 1)}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -258,6 +259,7 @@ export default function CalendarPage() {
           <Button
             variant="outline"
             size="sm"
+            className="min-h-[44px] sm:min-h-0"
             onClick={() => setWeekOffset(0)}
           >
             Today
@@ -265,6 +267,7 @@ export default function CalendarPage() {
           <Button
             variant="outline"
             size="icon"
+            className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
             onClick={() => setWeekOffset((w) => w + 1)}
           >
             <ChevronRight className="h-4 w-4" />
@@ -332,8 +335,9 @@ export default function CalendarPage() {
       </div>
 
       {/* ---- Calendar grid ---- */}
+      <div className="overflow-x-auto">
       {loading ? (
-        <div className="grid grid-cols-7 gap-3">
+        <div className="grid grid-cols-7 gap-3 min-w-[600px]">
           {[1, 2, 3, 4, 5, 6, 7].map((i) => (
             <div
               key={i}
@@ -342,7 +346,7 @@ export default function CalendarPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-7 gap-3">
+        <div className="grid grid-cols-7 gap-3 min-w-[600px]">
           {weekDays.map((day) => {
             const dateStr = formatDate(day);
             const dayTasks = tasks.filter((t) => {
@@ -381,17 +385,17 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={task.id}
-                        className="rounded-md p-2 text-xs"
+                        className="rounded-md p-1.5 sm:p-2 text-[10px] sm:text-xs"
                         style={{
                           backgroundColor: `${color}15`,
                           borderLeft: `2px solid ${color}`,
                         }}
                       >
-                        <div className="font-medium truncate flex items-center gap-1">
-                          {task.title}
+                        <div className="font-medium flex items-center gap-1 min-w-0">
+                          <span className="truncate">{task.title}</span>
                           {isRandomized && (
                             <Tooltip text="Anti-pattern detection: tasks run at varying times to avoid detection patterns">
-                              <span className="cursor-help">
+                              <span className="cursor-help shrink-0">
                                 <Dices className="h-3 w-3 text-amber-400" />
                               </span>
                             </Tooltip>
@@ -443,6 +447,7 @@ export default function CalendarPage() {
           })}
         </div>
       )}
+      </div>
 
       {/* ---- Schedule Randomizer Panel ---- */}
       {showRandomizerPanel && !loading && (
