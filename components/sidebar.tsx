@@ -14,6 +14,7 @@ import {
   Sparkles,
   Eye,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/factory", label: "🏭 Factory", icon: Factory },
   { href: "/veille", label: "👁️ Veille", icon: Eye },
   { href: "/reddit", label: "🔴 Reddit", icon: TrendingUp },
+  { href: "/hugo", label: "🎯 Hugo", icon: Users },
 ];
 
 export function Sidebar() {
